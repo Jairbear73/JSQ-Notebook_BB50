@@ -399,10 +399,9 @@ public class NotebookListScreen extends MainScreen implements ListFieldCallback 
 
         menu.add(new MenuItem("About...", 200, 80) {
             public void run() {
-                Dialog.alert("JSQ Notebook v1.0\n" +
-                        "BlackBerry OS 5.0\n\n" +
-                        "Trackpad & Menu Driven\n" +
-                        "100% Unsigned APIs");
+                Dialog.alert("JSQ Notebook v0.2\n" +
+                        "A rich text notebook application for BlackBerry OS 5.0\n\n" +
+                        "(C) Copyright JSQ Systems 2026");
             }
         });
 

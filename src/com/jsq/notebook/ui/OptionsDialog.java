@@ -48,8 +48,10 @@ public class OptionsDialog extends PopupScreen {
         darkModeField = new CheckboxField("Dark Mode (Invert View)", settings.isDarkMode());
         add(darkModeField);
 
-        LabelField darkDesc = new LabelField(" Inverts View Mode: pure black background, white text & adjusted colors.");
-        darkDesc.setFont(Font.getDefault().derive(Font.ITALIC, Font.getDefault().getHeight() - 3, net.rim.device.api.ui.Ui.UNITS_px));
+        LabelField darkDesc = new LabelField(
+                " Adjusts the colours to be compatible with a dark theme, text becomes white, and colour intensity is inverted.");
+        darkDesc.setFont(Font.getDefault().derive(Font.ITALIC, Font.getDefault().getHeight() - 3,
+                net.rim.device.api.ui.Ui.UNITS_px));
         add(darkDesc);
         add(new SeparatorField());
 
@@ -65,11 +67,13 @@ public class OptionsDialog extends PopupScreen {
         add(new SeparatorField());
 
         // Quick demo loader button
-        ButtonField loadDemoBtn = new ButtonField("Load OneNote Demo Notebook", ButtonField.CONSUME_CLICK | Field.FIELD_HCENTER);
+        ButtonField loadDemoBtn = new ButtonField("Load OneNote Demo Notebook",
+                ButtonField.CONSUME_CLICK | Field.FIELD_HCENTER);
         loadDemoBtn.setChangeListener(new FieldChangeListener() {
             public void fieldChanged(Field field, int context) {
                 Notebook nb = NotebookStoreManager.getInstance().addDemoNotebook();
-                Dialog.alert("Demo notebook added:\n\"" + nb.getName() + "\"\n\nContains full demo of all added OneNote features.");
+                Dialog.alert("Demo notebook added:\n\"" + nb.getName()
+                        + "\"\n\nContains full demo of all added OneNote features.");
                 if (onSettingsChangedCallback != null) {
                     onSettingsChangedCallback.run();
                 }

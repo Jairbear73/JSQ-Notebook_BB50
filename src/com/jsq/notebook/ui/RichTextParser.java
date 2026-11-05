@@ -287,7 +287,10 @@ public class RichTextParser {
     public static class ThemedLabelField extends LabelField {
         private int lightColor;
         private int darkColor;
-        /** Source line index in the notes string this field was rendered from (-1 if unknown). */
+        /**
+         * Source line index in the notes string this field was rendered from (-1 if
+         * unknown).
+         */
         public int srcLine = -1;
 
         public ThemedLabelField(String text, Font font, int lightColor, int darkColor) {
@@ -439,7 +442,10 @@ public class RichTextParser {
         private int[] colWidths;
         private int rowHeight;
         private int focusedRow = 0;
-        /** Source line index in the notes string this field was rendered from (-1 if unknown). */
+        /**
+         * Source line index in the notes string this field was rendered from (-1 if
+         * unknown).
+         */
         public int srcLine = -1;
 
         public TableField(Vector headers, Vector rows, int colCount) {
@@ -677,7 +683,10 @@ public class RichTextParser {
         private Vector lines;
         private int cachedHeight;
         private int focusedLine = 0;
-        /** Source line index in the notes string this field was rendered from (-1 if unknown). */
+        /**
+         * Source line index in the notes string this field was rendered from (-1 if
+         * unknown).
+         */
         public int srcLine = -1;
 
         public BlockquoteField(Vector lines) {
@@ -790,7 +799,10 @@ public class RichTextParser {
         private Vector codeLines;
         private int cachedHeight;
         private int focusedLine = 0;
-        /** Source line index in the notes string this field was rendered from (-1 if unknown). */
+        /**
+         * Source line index in the notes string this field was rendered from (-1 if
+         * unknown).
+         */
         public int srcLine = -1;
 
         public CodeBlockField(Vector codeLines) {
@@ -904,7 +916,8 @@ public class RichTextParser {
             return false;
         }
         String s = line.trim();
-        if (s.startsWith("- ") || s.startsWith("* ") || s.startsWith("+ ") || s.startsWith("> ") || s.startsWith("• ")) {
+        if (s.startsWith("- ") || s.startsWith("* ") || s.startsWith("+ ") || s.startsWith("> ")
+                || s.startsWith("• ")) {
             s = s.substring(2).trim();
         }
         return s.startsWith("[ ]") || StringUtils.startsWithIgnoreCase(s, "[x]");
@@ -913,7 +926,8 @@ public class RichTextParser {
     private static void renderTaskItem(Manager targetManager, final Page page, String line, final int lineIndex,
             final Runnable onNotesChangedCallback, int leadingSpaces) {
         String s = line.trim();
-        if (s.startsWith("- ") || s.startsWith("* ") || s.startsWith("+ ") || s.startsWith("> ") || s.startsWith("• ")) {
+        if (s.startsWith("- ") || s.startsWith("* ") || s.startsWith("+ ") || s.startsWith("> ")
+                || s.startsWith("• ")) {
             s = s.substring(2).trim();
         }
         final boolean isChecked = StringUtils.startsWithIgnoreCase(s, "[x]");
@@ -1003,10 +1017,6 @@ public class RichTextParser {
                 s.startsWith("[?]") || s.startsWith("[?]:") ||
                 s.startsWith("[*]") || s.startsWith("[*]:") ||
                 s.startsWith("[todo]") || s.startsWith("[idea]") || s.startsWith("[note]");
-    }
-
-    private static void renderTagLine(Manager targetManager, String line) {
-        renderTagLine(targetManager, line, -1);
     }
 
     private static void renderTagLine(Manager targetManager, String line, int srcLineIdx) {
@@ -1266,12 +1276,15 @@ public class RichTextParser {
         }
     }
 
-    private static class RichParagraphField extends Field {
+    public static class RichParagraphField extends Field {
         private int cachedHeight;
         private Vector lineLayouts; // Vector of Vectors containing Word objects
         private Vector words;
         private int focusedLine = 0;
-        /** Source line index in the notes string this field was rendered from (-1 if unknown). */
+        /**
+         * Source line index in the notes string this field was rendered from (-1 if
+         * unknown).
+         */
         public int srcLine = -1;
 
         public RichParagraphField(Vector segments) {

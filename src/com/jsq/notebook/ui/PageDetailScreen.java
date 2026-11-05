@@ -75,6 +75,19 @@ public class PageDetailScreen extends MainScreen {
     }
 
     public void switchMode(boolean editMode) {
+        // If we are currently leaving Edit Mode, capture the cursor's source line first
+        if (this.isEditMode && !editMode && notesEditField != null) {
+            String text = notesEditField.getText();
+            int cursor = notesEditField.getCursorPosition();
+            int lineIdx = 0;
+            for (int i = 0; i < cursor && i < text.length(); i++) {
+                if (text.charAt(i) == '\n') {
+                    lineIdx++;
+                }
+            }
+            viewFocusedSourceLine = lineIdx;
+        }
+
         this.isEditMode = editMode;
         deleteAll();
         Manager mgr = getMainManager();
@@ -176,7 +189,21 @@ public class PageDetailScreen extends MainScreen {
             }
         });
 
+        // Add manager to screen FIRST so fields have a valid screen reference
         add(viewContentManager);
+
+        // Restore focus to the corresponding source line field in view mode
+        if (viewFocusedSourceLine > 0) {
+            int fieldCount = viewContentManager.getFieldCount();
+            for (int i = 0; i < fieldCount; i++) {
+                Field f = viewContentManager.getField(i);
+                int fLine = getSrcLineOfFocusedField(f);
+                if (fLine == viewFocusedSourceLine) {
+                    f.setFocus();
+                    break;
+                }
+            }
+        }
     }
 
     // ==========================================
@@ -220,18 +247,26 @@ public class PageDetailScreen extends MainScreen {
         // Add manager to screen FIRST so the focus chain is valid
         add(editContentManager);
 
-        // Restore cursor to the notes line that was focused in view mode
+        // Restore cursor to the notes line that was focused in view mode (deferred to
+        // ensure layout is ready)
         if (viewFocusedSourceLine > 0 && page.getNotes() != null && page.getNotes().length() > 0) {
-            Vector notesLines = StringUtils.splitLines(page.getNotes());
-            int offset = 0;
-            for (int i = 0; i < viewFocusedSourceLine && i < notesLines.size(); i++) {
-                offset += ((String) notesLines.elementAt(i)).length() + 1; // +1 for newline
-            }
-            if (offset > page.getNotes().length()) {
-                offset = page.getNotes().length();
-            }
-            notesEditField.setCursorPosition(offset);
-            notesEditField.setFocus();
+            final int targetLine = viewFocusedSourceLine;
+            UiApplication.getUiApplication().invokeLater(new Runnable() {
+                public void run() {
+                    if (notesEditField != null && page.getNotes() != null) {
+                        Vector notesLines = StringUtils.splitLines(page.getNotes());
+                        int offset = 0;
+                        for (int i = 0; i < targetLine && i < notesLines.size(); i++) {
+                            offset += ((String) notesLines.elementAt(i)).length() + 1; // +1 for newline
+                        }
+                        if (offset > page.getNotes().length()) {
+                            offset = page.getNotes().length();
+                        }
+                        notesEditField.setCursorPosition(offset);
+                        notesEditField.setFocus();
+                    }
+                }
+            });
         }
     }
 
@@ -624,6 +659,10 @@ public class PageDetailScreen extends MainScreen {
         }
         if (f instanceof RichTextParser.CodeBlockField) {
             int sl = ((RichTextParser.CodeBlockField) f).srcLine;
+            return sl >= 0 ? sl : 0;
+        }
+        if (f instanceof RichTextParser.RichParagraphField) {
+            int sl = ((RichTextParser.RichParagraphField) f).srcLine;
             return sl >= 0 ? sl : 0;
         }
         return 0;

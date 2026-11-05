@@ -19,6 +19,7 @@ AutoRestart=0
 ]
 [DependsOn
 ]
+Description=A rich text notebook application for BlackBerry OS 5.0
 ExcludeFromBuildAll=0
 Exported=0
 [Files
@@ -67,3 +68,4 @@ SystemModule=0
 Title=JSQ Notebook
 Type=0
 Vendor=JSQ Systems
+Version=0.2
