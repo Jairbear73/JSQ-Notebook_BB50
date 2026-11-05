@@ -1,0 +1,29 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build JSQ Notebook",
+            "type": "shell",
+            "command": "cmd.exe",
+            "args": [
+                "/v:on",
+                "/c",
+                "set \"PATH=c:\\Program Files (x86)\\Java\\jdk1.6.0_45\\bin;C:\\Progs\\bbjde50\\bin;%SystemRoot%\\system32;%SystemRoot%\" && set \"FILES=\" && (for /r \"${workspaceFolder}\\src\" %i in (*.java) do set \"FILES=!FILES! %i\") && C:\\Progs\\bbjde50\\bin\\rapc.exe -quiet codename=jsq.notebook.bb50 jsq.notebook.bb50.rapc warnkey=0x52424200;0x52525400;0x52435200 import=C:\\Progs\\bbjde50\\lib\\net_rim_api.jar !FILES! && (echo Build Succeeded) || (echo Build Failed)"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared"
+            },
+            "problemMatcher": []
+        }
+    ]
+}

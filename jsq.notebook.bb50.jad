@@ -1,0 +1,19 @@
+Manifest-Version: 1.0
+MIDlet-Version: 0.0
+MIDlet-Jar-Size: 248016
+MicroEdition-Configuration: CLDC-1.1
+MIDlet-Jar-URL: JSQ-Notebook.jar
+RIM-COD-Module-Dependencies: net_rim_cldc
+RIM-COD-URL-1: jsq$2enotebook$2ebb50-1.cod
+RIM-COD-SHA1-1: 14 2d 4a 2a 37 b1 83 92 1a 72 b5 e6 a2 ca ae 65 23 4b bf 55
+RIM-MIDlet-Flags-1: 0
+RIM-COD-Size-1: 17096
+RIM-COD-Module-Name: jsq$2enotebook$2ebb50
+MIDlet-Name: JSQ-Notebook
+RIM-COD-Size: 81000
+RIM-COD-Creation-Time: 1793843335
+MIDlet-1: JSQ Notebook,,
+RIM-COD-URL: jsq$2enotebook$2ebb50.cod
+RIM-COD-SHA1: 02 e7 11 fb 39 9f d4 64 98 26 a2 46 4d ee 35 22 01 6f 8e 81
+MicroEdition-Profile: MIDP-2.0
+MIDlet-Vendor: JSQ Systems
