@@ -1,6 +1,5 @@
 # JSQ Notebook
 ## For BlackBerry OS 5.0
-(C) Copyright JSQ Systems 2026
 
 This is a OneNote inspired note taking application, with markdown style editing, and full rich text & multimedia support.
 All code strictly uses unsigned apis, meaning no keys are required to compile, and has been optimised to run as fast as possible.
@@ -14,12 +13,12 @@ Notes are stored in notebooks similar to OneNote. Each notebook contains section
 Each page by default has a title and content field. However you can change the default fields for a section, including adding custom fields, or change fields for just one page.
 
 **Formatting**
-JSQ Notebook uses markdown stformatting for rich text. This allows for easy formatting of text, including bold, italic, underline, strikethrough, as well as more advanced features such as:
-> Code blocks
-> Tables
-> Quotes
-> Checkboxes
-> Lists
+JSQ Notebook uses markdown style formatting for rich text. This allows for easy formatting of text, including bold, italic, underline, strikethrough, as well as more advanced features such as:
+- Code blocks
+- Tables
+- Quotes
+- Checkboxes
+- Lists
 ...and many other things you'd find in markdown and onenote.
 
 *Multimedia* content such as images and audio files can also be embedded in pages.
