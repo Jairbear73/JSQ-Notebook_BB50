@@ -1,20 +1,23 @@
 Manifest-Version: 1.0
 MIDlet-Version: 0.0
-MIDlet-Jar-Size: 327799
+MIDlet-Jar-Size: 348800
+RIM-COD-URL-2: jsq$2enotebook$2ebb50-2.cod
 MicroEdition-Configuration: CLDC-1.1
 MIDlet-Jar-URL: JSQ-Notebook.jar
 RIM-COD-Module-Dependencies: net_rim_cldc
+RIM-COD-SHA1-2: 74 d8 0a ae f7 7d 48 d2 e5 44 ff fc ad 99 1b eb d2 53 bc 10
 RIM-COD-URL-1: jsq$2enotebook$2ebb50-1.cod
-RIM-COD-SHA1-1: 64 83 e2 0b 93 9d 85 b2 30 47 a1 a0 46 10 8c 51 cc c3 6d 3f
+RIM-COD-SHA1-1: 3c 59 4a 32 d1 ad c7 3b 52 2d 36 b1 c6 72 8b 13 9b e5 a9 78
+RIM-COD-Size-2: 7256
 RIM-MIDlet-Flags-1: 0
-RIM-COD-Size-1: 56188
+RIM-COD-Size-1: 72788
 RIM-COD-Module-Name: jsq$2enotebook$2ebb50
 MIDlet-Name: JSQ-Notebook
-RIM-COD-Size: 74908
-RIM-COD-Creation-Time: 1794802241
+RIM-COD-Size: 77136
+RIM-COD-Creation-Time: 1794803053
 MIDlet-1: JSQ Notebook,,
 RIM-COD-URL: jsq$2enotebook$2ebb50.cod
 MIDlet-Description: A rich text notebook application for BlackBerry OS 5.0
-RIM-COD-SHA1: 50 5a 43 a5 78 98 29 55 b6 91 f4 78 64 ce 9d 7f 07 f6 0c 4b
+RIM-COD-SHA1: e7 f2 6b 32 be 01 9b 08 e5 71 c3 d4 ce 03 ff 23 ab 6a dc f4
 MicroEdition-Profile: MIDP-2.0
 MIDlet-Vendor: JSQ Systems

@@ -111,6 +111,49 @@ public class OptionsDialog extends PopupScreen {
         add(loadDemoBtn);
         add(new SeparatorField());
 
+        // Debug notebook loader button
+        ButtonField loadDebugBtn = new ButtonField("Load Debug Notebook",
+                ButtonField.CONSUME_CLICK | Field.FIELD_HCENTER);
+        loadDebugBtn.setChangeListener(new FieldChangeListener() {
+            public void fieldChanged(Field field, int context) {
+                final ProgressPopupScreen progress = new ProgressPopupScreen("Building Debug Notebook");
+                UiApplication.getUiApplication().pushScreen(progress);
+
+                new Thread(new Runnable() {
+                    public void run() {
+                        try {
+                            final Notebook nb = NotebookStoreManager.getInstance()
+                                    .addDebugNotebook(new ProgressListener() {
+                                        public void onProgress(int current, int total, String status) {
+                                            progress.updateProgress(current, total, status);
+                                        }
+                                    });
+
+                            progress.finish();
+                            UiApplication.getUiApplication().invokeLater(new Runnable() {
+                                public void run() {
+                                    Dialog.alert("Debug notebook added:\n\"" + nb.getName()
+                                            + "\"\n\nContains Test & Benchmark sections.");
+                                    if (onSettingsChangedCallback != null) {
+                                        onSettingsChangedCallback.run();
+                                    }
+                                }
+                            });
+                        } catch (final Exception e) {
+                            progress.finish();
+                            UiApplication.getUiApplication().invokeLater(new Runnable() {
+                                public void run() {
+                                    Dialog.alert("Failed to build debug notebook:\n" + e.getMessage());
+                                }
+                            });
+                        }
+                    }
+                }).start();
+            }
+        });
+        add(loadDebugBtn);
+        add(new SeparatorField());
+
         // OK / Cancel Action Buttons
         HorizontalFieldManager buttonBar = new HorizontalFieldManager(Field.FIELD_HCENTER);
         ButtonField saveBtn = new ButtonField("Save", ButtonField.CONSUME_CLICK);

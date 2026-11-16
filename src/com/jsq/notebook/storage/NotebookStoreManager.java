@@ -147,4 +147,14 @@ public class NotebookStoreManager {
         commit();
         return nb;
     }
+
+    public synchronized Notebook addDebugNotebook() {
+        return addDebugNotebook(null);
+    }
+
+    public synchronized Notebook addDebugNotebook(com.jsq.notebook.util.ProgressListener listener) {
+        Notebook nb = database.createDebugNotebook(listener);
+        commit();
+        return nb;
+    }
 }
