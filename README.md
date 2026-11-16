@@ -38,6 +38,14 @@ All of your notebooks can be exported to a custom .jnb file and directory struct
 
 Importing these files is also supported.
 
+**Backup & Restore (.jnbb)**
+Full database backup and restore for all notebooks into a single portable `.jnbb` file.
+Unlike single-notebook export, backup preserves your entire database—including all notebooks, sections, custom field templates, pages, custom fields, and all embedded binary attachments (images/multimedia).
+- Includes real-time progress bar reporting with item counts and current tasks.
+- Highly efficient binary streaming format that operates within BlackBerry OS 5.0 memory constraints without heap bloat.
+- Fully unsigned implementation using standard JSR-75 FileConnection APIs.
+- Flexible restore options: Replace all existing notebooks or merge into your existing library without ID conflicts.
+
 
 ### Installation:
 

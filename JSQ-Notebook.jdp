@@ -23,9 +23,11 @@ Description=A rich text notebook application for BlackBerry OS 5.0
 ExcludeFromBuildAll=0
 Exported=0
 [Files
+src\com\jsq\notebook\export\NotebookBackupManager.java
 src\com\jsq\notebook\export\NotebookImportManager.java
 src\com\jsq\notebook\export\PageExportManager.java
 src\com\jsq\notebook\JSQNotebookApp.java
+src\com\jsq\notebook\model\AppSettings.java
 src\com\jsq\notebook\model\CustomField.java
 src\com\jsq\notebook\model\CustomFieldDefinition.java
 src\com\jsq\notebook\model\FieldType.java
@@ -37,8 +39,11 @@ src\com\jsq\notebook\storage\AttachmentStorageManager.java
 src\com\jsq\notebook\storage\NotebookStoreManager.java
 src\com\jsq\notebook\ui\FilePickerPopup.java
 src\com\jsq\notebook\ui\NotebookListScreen.java
+src\com\jsq\notebook\ui\OptionsDialog.java
 src\com\jsq\notebook\ui\PageDetailScreen.java
 src\com\jsq\notebook\ui\PageListScreen.java
+src\com\jsq\notebook\ui\ProgressBarField.java
+src\com\jsq\notebook\ui\ProgressPopupScreen.java
 src\com\jsq\notebook\ui\RichTextParser.java
 src\com\jsq\notebook\ui\SectionListScreen.java
 src\com\jsq\notebook\ui\SectionTemplateScreen.java

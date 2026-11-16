@@ -33,8 +33,11 @@ public class RichTextParser {
     private static Font h2Font;
     private static Font h3Font;
     private static Font h4Font;
+    private static Font h5Font;
+    private static Font h6Font;
     private static Font boldFont;
     private static Font italicFont;
+    private static Font boldItalicFont;
     private static Font monoFont;
 
     static {
@@ -44,9 +47,93 @@ public class RichTextParser {
         h2Font = baseFont.derive(Font.BOLD, baseH + 3, net.rim.device.api.ui.Ui.UNITS_px);
         h3Font = baseFont.derive(Font.BOLD, baseH + 1, net.rim.device.api.ui.Ui.UNITS_px);
         h4Font = baseFont.derive(Font.BOLD, baseH, net.rim.device.api.ui.Ui.UNITS_px);
+        h5Font = baseFont.derive(Font.BOLD, Math.max(9, baseH - 1), net.rim.device.api.ui.Ui.UNITS_px);
+        h6Font = baseFont.derive(Font.BOLD | Font.ITALIC, Math.max(8, baseH - 2), net.rim.device.api.ui.Ui.UNITS_px);
         boldFont = baseFont.derive(Font.BOLD);
         italicFont = baseFont.derive(Font.ITALIC);
+        boldItalicFont = baseFont.derive(Font.BOLD | Font.ITALIC);
         monoFont = baseFont.derive(Font.PLAIN, Math.max(9, baseH - 2), net.rim.device.api.ui.Ui.UNITS_px);
+    }
+
+    /**
+     * Splits a string of text into wrapped lines that each fit within maxWidth using the given Font.
+     * Breaks cleanly on word boundaries (spaces), or splits long words by character if needed.
+     */
+    public static Vector wrapText(String text, Font font, int maxWidth) {
+        Vector lines = new Vector();
+        if (text == null || text.length() == 0) {
+            lines.addElement("");
+            return lines;
+        }
+        if (maxWidth <= 20) {
+            maxWidth = 20;
+        }
+
+        if (font.getAdvance(text) <= maxWidth) {
+            lines.addElement(text);
+            return lines;
+        }
+
+        Vector rawWords = StringUtils.split(text, ' ');
+        StringBuffer currentLine = new StringBuffer();
+
+        for (int i = 0; i < rawWords.size(); i++) {
+            String word = (String) rawWords.elementAt(i);
+            if (word.length() == 0) {
+                continue;
+            }
+
+            if (currentLine.length() == 0) {
+                if (font.getAdvance(word) <= maxWidth) {
+                    currentLine.append(word);
+                } else {
+                    int wordLen = word.length();
+                    int start = 0;
+                    for (int c = 1; c <= wordLen; c++) {
+                        String sub = word.substring(start, c);
+                        if (font.getAdvance(sub) > maxWidth && c > start + 1) {
+                            lines.addElement(word.substring(start, c - 1));
+                            start = c - 1;
+                        }
+                    }
+                    if (start < wordLen) {
+                        currentLine.append(word.substring(start));
+                    }
+                }
+            } else {
+                String candidate = currentLine.toString() + " " + word;
+                if (font.getAdvance(candidate) <= maxWidth) {
+                    currentLine.append(' ').append(word);
+                } else {
+                    lines.addElement(currentLine.toString());
+                    currentLine = new StringBuffer();
+                    if (font.getAdvance(word) <= maxWidth) {
+                        currentLine.append(word);
+                    } else {
+                        int wordLen = word.length();
+                        int start = 0;
+                        for (int c = 1; c <= wordLen; c++) {
+                            String sub = word.substring(start, c);
+                            if (font.getAdvance(sub) > maxWidth && c > start + 1) {
+                                lines.addElement(word.substring(start, c - 1));
+                                start = c - 1;
+                            }
+                        }
+                        if (start < wordLen) {
+                            currentLine.append(word.substring(start));
+                        }
+                    }
+                }
+            }
+        }
+
+        if (currentLine.length() > 0) {
+            lines.addElement(currentLine.toString());
+        }
+        if (lines.size() == 0) {
+            lines.addElement("");
+        }
+        return lines;
     }
 
     /**
@@ -96,6 +183,39 @@ public class RichTextParser {
             }
             int listLevel = (leadingSpaces / 2) + 1;
 
+            // HTML Comments: <!-- ... -->
+            if (trimmed.startsWith("<!--")) {
+                while (i < lineCount) {
+                    String commentLine = ((String) lines.elementAt(i)).trim();
+                    if (commentLine.indexOf("-->") >= 0) {
+                        break;
+                    }
+                    i++;
+                }
+                continue;
+            }
+
+            // Setext-style Headings: line followed by === or ---
+            if (i + 1 < lineCount && trimmed.length() > 0 && !trimmed.startsWith("|") && !trimmed.startsWith("#") && !isTableSeparatorRow(trimmed)) {
+                String nextLineTrimmed = ((String) lines.elementAt(i + 1)).trim();
+                if (nextLineTrimmed.startsWith("===") && nextLineTrimmed.length() >= 3) {
+                    ThemedLabelField h1 = new ThemedLabelField(cleanMarkup(trimmed), h1Font,
+                            LabelField.FOCUSABLE, 0x1A5276, 0x90CDF4);
+                    h1.srcLine = i;
+                    targetManager.add(h1);
+                    targetManager.add(new ThemedSeparatorField());
+                    i++;
+                    continue;
+                } else if (nextLineTrimmed.startsWith("---") && nextLineTrimmed.length() >= 3 && !nextLineTrimmed.endsWith("|")) {
+                    ThemedLabelField h2 = new ThemedLabelField(cleanMarkup(trimmed), h2Font,
+                            LabelField.FOCUSABLE, 0x2C3E50, 0xCBD5E1);
+                    h2.srcLine = i;
+                    targetManager.add(h2);
+                    i++;
+                    continue;
+                }
+            }
+
             // 1. Multiline Code Block: ```...```
             if (trimmed.startsWith("```")) {
                 Vector codeLines = new Vector();
@@ -121,14 +241,14 @@ public class RichTextParser {
                 tableLines.addElement(trimmed);
                 while (i + 1 < lineCount) {
                     String nextLine = ((String) lines.elementAt(i + 1)).trim();
-                    if (nextLine.startsWith("|") && nextLine.endsWith("|")) {
+                    if ((nextLine.startsWith("|") && nextLine.endsWith("|")) || isTableSeparatorRow(nextLine)) {
                         tableLines.addElement(nextLine);
                         i++;
                     } else {
                         break;
                     }
                 }
-                renderTableBlock(targetManager, tableLines, startLine);
+                renderTableBlock(page, targetManager, tableLines, startLine, onNotesChangedCallback);
                 continue;
             }
 
@@ -139,7 +259,19 @@ public class RichTextParser {
             }
 
             // 4. Headings (with Light / Dark mode intensity reversals)
-            if (trimmed.startsWith("#### ")) {
+            if (trimmed.startsWith("###### ")) {
+                ThemedLabelField h6 = new ThemedLabelField(cleanMarkup(trimmed.substring(7)), h6Font,
+                        LabelField.FOCUSABLE, 0x7F8C8D, 0x94A3B8);
+                h6.srcLine = i;
+                targetManager.add(h6);
+                continue;
+            } else if (trimmed.startsWith("##### ")) {
+                ThemedLabelField h5 = new ThemedLabelField(cleanMarkup(trimmed.substring(6)), h5Font,
+                        LabelField.FOCUSABLE, 0x64748B, 0xCBD5E1);
+                h5.srcLine = i;
+                targetManager.add(h5);
+                continue;
+            } else if (trimmed.startsWith("#### ")) {
                 ThemedLabelField h4 = new ThemedLabelField(cleanMarkup(trimmed.substring(5)), h4Font,
                         LabelField.FOCUSABLE, 0x5D6D7E, 0x94A3B8);
                 h4.srcLine = i;
@@ -172,15 +304,20 @@ public class RichTextParser {
                 continue;
             }
 
-            // 6. Purple Callout: * callout
-            if (isCalloutItem(trimmed)) {
+            // 6. Purple Callout: * callout OR Alert Banner (* [!NOTE], > [!NOTE], etc.)
+            if (isCalloutItem(trimmed) || isAlertStart(trimmed)) {
                 Vector calloutLines = new Vector();
                 int startLine = i;
-                calloutLines.addElement(stripStarPrefix(trimmed));
+                calloutLines.addElement(stripCalloutPrefix(trimmed));
+                boolean currentIsAlert = isAlertStart(trimmed);
                 while (i + 1 < lineCount) {
                     String nextLine = ((String) lines.elementAt(i + 1)).trim();
-                    if (isCalloutItem(nextLine)) {
-                        calloutLines.addElement(stripStarPrefix(nextLine));
+                    if (isAlertStart(nextLine)) {
+                        // Start of a new distinct alert banner, don't bundle into this one!
+                        break;
+                    }
+                    if (isCalloutItem(nextLine) || (currentIsAlert && nextLine.startsWith(">"))) {
+                        calloutLines.addElement(stripCalloutPrefix(nextLine));
                         i++;
                     } else {
                         break;
@@ -254,8 +391,13 @@ public class RichTextParser {
                 continue;
             }
 
-            // 12. Standalone image block
-            if (trimmed.toLowerCase().startsWith("[image:") && trimmed.endsWith("]")) {
+            // 12. Standalone image block: [image: ...] or ![alt](file)
+            if (trimmed.startsWith("![") && trimmed.indexOf("](") > 0 && trimmed.endsWith(")")) {
+                int mid = trimmed.indexOf("](");
+                String imgPath = trimmed.substring(mid + 2, trimmed.length() - 1).trim();
+                renderImage(targetManager, storage, imgPath, maxImageWidth);
+                continue;
+            } else if (trimmed.toLowerCase().startsWith("[image:") && trimmed.endsWith("]")) {
                 String imgName = trimmed.substring(7, trimmed.length() - 1).trim();
                 renderImage(targetManager, storage, imgName, maxImageWidth);
                 continue;
@@ -368,43 +510,72 @@ public class RichTextParser {
     // ==========================================
     // Table Rendering
     // ==========================================
-    private static void renderTableBlock(Manager targetManager, Vector tableLines, int srcLineIdx) {
+    private static void renderTableBlock(final Page page, Manager targetManager, Vector tableLines, int startLine, final Runnable onNotesChangedCallback) {
         if (tableLines == null || tableLines.size() == 0) {
             return;
         }
 
-        Vector headers = null;
-        Vector dataRows = new Vector();
+        Vector allRows = new Vector();
+        Vector isHeaderFlags = new Vector();
+        Vector rowSourceLines = new Vector();
         int maxCols = 0;
-        boolean headerProcessed = false;
 
-        for (int i = 0; i < tableLines.size(); i++) {
-            String rowStr = (String) tableLines.elementAt(i);
+        boolean firstRowSeen = false;
+        boolean lastRowWasHeader = false;
+        boolean nextRowIsHeader = false;
+
+        for (int k = 0; k < tableLines.size(); k++) {
+            String rowStr = (String) tableLines.elementAt(k);
+            int currentSourceLine = startLine + k;
+
             if (isTableSeparatorRow(rowStr)) {
+                if (lastRowWasHeader) {
+                    lastRowWasHeader = false;
+                } else {
+                    nextRowIsHeader = true;
+                }
                 continue;
             }
+
             Vector cells = parseTableRow(rowStr);
             if (cells.size() > maxCols) {
                 maxCols = cells.size();
             }
 
-            if (!headerProcessed) {
-                headers = cells;
-                headerProcessed = true;
+            boolean isHdr = false;
+            if (!firstRowSeen) {
+                isHdr = true;
+                firstRowSeen = true;
+                lastRowWasHeader = true;
+            } else if (nextRowIsHeader) {
+                isHdr = true;
+                nextRowIsHeader = false;
+                lastRowWasHeader = true;
             } else {
-                dataRows.addElement(cells);
+                isHdr = false;
+                lastRowWasHeader = false;
             }
+
+            allRows.addElement(cells);
+            isHeaderFlags.addElement(isHdr ? Boolean.TRUE : Boolean.FALSE);
+            rowSourceLines.addElement(new Integer(currentSourceLine));
         }
 
-        if (maxCols > 0) {
-            TableField tf = new TableField(headers, dataRows, maxCols);
-            tf.srcLine = srcLineIdx;
+        if (maxCols > 0 && allRows.size() > 0) {
+            TableField tf = new TableField(page, allRows, isHeaderFlags, rowSourceLines, maxCols, onNotesChangedCallback);
+            tf.srcLine = startLine;
             targetManager.add(tf);
         }
     }
 
-    private static boolean isTableSeparatorRow(String row) {
+    public static boolean isTableSeparatorRow(String row) {
+        if (row == null) {
+            return false;
+        }
         String trimmed = row.trim();
+        if (trimmed.length() == 0) {
+            return false;
+        }
         for (int i = 0; i < trimmed.length(); i++) {
             char c = trimmed.charAt(i);
             if (c != '|' && c != '-' && c != ':' && c != ' ') {
@@ -428,41 +599,208 @@ public class RichTextParser {
             String inner = row.substring(start, end);
             Vector raw = StringUtils.split(inner, '|');
             for (int i = 0; i < raw.size(); i++) {
-                cells.addElement(cleanMarkup(((String) raw.elementAt(i)).trim()));
+                String c = ((String) raw.elementAt(i)).trim();
+                if (TableField.isCellCheckbox(c)) {
+                    String label = TableField.getCellCheckboxLabel(c);
+                    String prefix = TableField.isCellCheckboxChecked(c) ? "[x]" : "[ ]";
+                    cells.addElement(prefix + (label.length() > 0 ? " " + cleanMarkup(label) : ""));
+                } else {
+                    cells.addElement(cleanMarkup(c));
+                }
             }
         }
         return cells;
     }
 
     public static class TableField extends Field {
-        private Vector headers;
-        private Vector rows;
+        private Page page;
+        private Runnable onNotesChangedCallback;
+        private Vector rows; // Vector of Vectors of Strings (cell text)
+        private Vector isHeaderFlags; // Vector of Boolean (true if row is a header)
+        private Vector rowSourceLines; // Vector of Integer (source line index in page.getNotes())
         private int colCount;
         private int totalHeight;
         private int[] colWidths;
-        private int rowHeight;
+        private int[] rowHeights;
+        private int[] rowY;
+        private Vector[][] wrappedCells; // wrappedCells[r][c] = Vector of String lines
         private int focusedRow = 0;
+        private int focusedCol = 0;
         /**
          * Source line index in the notes string this field was rendered from (-1 if
          * unknown).
          */
         public int srcLine = -1;
 
-        public TableField(Vector headers, Vector rows, int colCount) {
+        public TableField(Page page, Vector rows, Vector isHeaderFlags, Vector rowSourceLines, int colCount, Runnable callback) {
             super(Field.FOCUSABLE);
-            this.headers = headers;
-            this.rows = rows;
+            this.page = page;
+            this.rows = rows != null ? rows : new Vector();
+            this.isHeaderFlags = isHeaderFlags != null ? isHeaderFlags : new Vector();
+            this.rowSourceLines = rowSourceLines != null ? rowSourceLines : new Vector();
             this.colCount = Math.max(1, colCount);
-            this.rowHeight = baseFont.getHeight() + 8;
+            this.onNotesChangedCallback = callback;
         }
 
-        private int getTotalRows() {
-            return (headers != null && headers.size() > 0 ? 1 : 0) + (rows != null ? rows.size() : 0);
+        public TableField(Vector headers, Vector rows, int colCount) {
+            this(null, buildAllRows(headers, rows), buildHeaderFlags(headers, rows), null, colCount, null);
+        }
+
+        private static Vector buildAllRows(Vector headers, Vector rows) {
+            Vector all = new Vector();
+            if (headers != null && headers.size() > 0) {
+                all.addElement(headers);
+            }
+            if (rows != null) {
+                for (int i = 0; i < rows.size(); i++) {
+                    all.addElement(rows.elementAt(i));
+                }
+            }
+            return all;
+        }
+
+        private static Vector buildHeaderFlags(Vector headers, Vector rows) {
+            Vector flags = new Vector();
+            if (headers != null && headers.size() > 0) {
+                flags.addElement(Boolean.TRUE);
+            }
+            if (rows != null) {
+                for (int i = 0; i < rows.size(); i++) {
+                    flags.addElement(Boolean.FALSE);
+                }
+            }
+            return flags;
+        }
+
+        public static boolean isCellCheckbox(String text) {
+            if (text == null) return false;
+            String s = text.trim();
+            return s.startsWith("[ ]") || StringUtils.startsWithIgnoreCase(s, "[x]");
+        }
+
+        public static boolean isCellCheckboxChecked(String text) {
+            if (text == null) return false;
+            String s = text.trim();
+            return StringUtils.startsWithIgnoreCase(s, "[x]");
+        }
+
+        public static String getCellCheckboxLabel(String text) {
+            if (text == null) return "";
+            String s = text.trim();
+            if (s.startsWith("[ ]") || StringUtils.startsWithIgnoreCase(s, "[x]")) {
+                int close = s.indexOf(']');
+                return close >= 0 ? s.substring(close + 1).trim() : "";
+            }
+            return s;
+        }
+
+        public boolean isRowHeader(int r) {
+            if (isHeaderFlags != null && r >= 0 && r < isHeaderFlags.size()) {
+                return ((Boolean) isHeaderFlags.elementAt(r)).booleanValue();
+            }
+            return (r == 0);
+        }
+
+        public int getFocusedSourceLine() {
+            if (rowSourceLines != null && focusedRow >= 0 && focusedRow < rowSourceLines.size()) {
+                return ((Integer) rowSourceLines.elementAt(focusedRow)).intValue();
+            }
+            return srcLine >= 0 ? srcLine : 0;
+        }
+
+        public boolean handleTableClick() {
+            if (focusedRow < 0 || focusedRow >= rows.size()) {
+                return false;
+            }
+            Vector rowCells = (Vector) rows.elementAt(focusedRow);
+            // 1. If focused column has a checkbox, toggle it
+            if (focusedCol >= 0 && focusedCol < rowCells.size()) {
+                String cell = (String) rowCells.elementAt(focusedCol);
+                if (isCellCheckbox(cell)) {
+                    toggleCheckbox(focusedRow, focusedCol);
+                    return true;
+                }
+            }
+            // 2. If row has any checkbox, toggle the first one found
+            for (int c = 0; c < rowCells.size(); c++) {
+                String cell = (String) rowCells.elementAt(c);
+                if (isCellCheckbox(cell)) {
+                    focusedCol = c;
+                    toggleCheckbox(focusedRow, c);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        protected boolean navigationClick(int status, int time) {
+            if (handleTableClick()) {
+                return true;
+            }
+            return super.navigationClick(status, time);
+        }
+
+        public void toggleCheckbox(int r, int c) {
+            if (r < 0 || r >= rows.size()) return;
+            Vector rowCells = (Vector) rows.elementAt(r);
+            if (c < 0 || c >= rowCells.size()) return;
+
+            String oldCell = (String) rowCells.elementAt(c);
+            if (!isCellCheckbox(oldCell)) return;
+
+            boolean nowChecked = !isCellCheckboxChecked(oldCell);
+            String label = getCellCheckboxLabel(oldCell);
+            String newCell = (nowChecked ? "[x]" : "[ ]") + (label.length() > 0 ? " " + label : "");
+            rowCells.setElementAt(newCell, c);
+
+            if (page != null && rowSourceLines != null && r < rowSourceLines.size()) {
+                int noteLineIdx = ((Integer) rowSourceLines.elementAt(r)).intValue();
+                updateCheckboxInPageNotes(noteLineIdx, c, nowChecked);
+            }
+
+            invalidate();
+            if (onNotesChangedCallback != null) {
+                onNotesChangedCallback.run();
+            }
+        }
+
+        private void updateCheckboxInPageNotes(int noteLineIdx, int colIdx, boolean checked) {
+            if (page == null) return;
+            String notes = page.getNotes();
+            if (notes == null) return;
+            Vector lines = StringUtils.splitLines(notes);
+            if (noteLineIdx < 0 || noteLineIdx >= lines.size()) return;
+
+            String oldLine = (String) lines.elementAt(noteLineIdx);
+            Vector cells = parseTableRow(oldLine);
+            if (colIdx >= 0 && colIdx < cells.size()) {
+                String cell = (String) cells.elementAt(colIdx);
+                String label = getCellCheckboxLabel(cell);
+                String updatedCell = (checked ? "[x]" : "[ ]") + (label.length() > 0 ? " " + label : "");
+                cells.setElementAt(updatedCell, colIdx);
+
+                StringBuffer sb = new StringBuffer("|");
+                for (int i = 0; i < cells.size(); i++) {
+                    sb.append(" ").append(cells.elementAt(i)).append(" |");
+                }
+                lines.setElementAt(sb.toString(), noteLineIdx);
+
+                StringBuffer newNotes = new StringBuffer();
+                for (int j = 0; j < lines.size(); j++) {
+                    newNotes.append((String) lines.elementAt(j));
+                    if (j < lines.size() - 1) {
+                        newNotes.append("\n");
+                    }
+                }
+                page.setNotes(newNotes.toString());
+                page.setModifiedTime(System.currentTimeMillis());
+                NotebookStoreManager.getInstance().commit();
+            }
         }
 
         protected void onFocus(int direction) {
             super.onFocus(direction);
-            int numRows = getTotalRows();
+            int numRows = rows.size();
             if (numRows > 0) {
                 if (direction > 0) {
                     focusedRow = 0;
@@ -481,15 +819,14 @@ public class RichTextParser {
         }
 
         protected boolean navigationMovement(int dx, int dy, int status, int time) {
-            int numRows = getTotalRows();
+            int numRows = rows.size();
             if (dy > 0) {
                 if (focusedRow < numRows - 1) {
                     focusedRow++;
                     invalidate();
                     net.rim.device.api.ui.Screen scr = getScreen();
-                    if (scr != null) {
-                        int rowY = 2 + focusedRow * rowHeight;
-                        scr.ensureRegionVisible(this, 0, rowY, getWidth(), rowHeight);
+                    if (scr != null && rowY != null && focusedRow < rowY.length && rowHeights != null && focusedRow < rowHeights.length) {
+                        scr.ensureRegionVisible(this, 0, rowY[focusedRow], getWidth(), rowHeights[focusedRow]);
                     }
                     return true;
                 }
@@ -498,10 +835,21 @@ public class RichTextParser {
                     focusedRow--;
                     invalidate();
                     net.rim.device.api.ui.Screen scr = getScreen();
-                    if (scr != null) {
-                        int rowY = 2 + focusedRow * rowHeight;
-                        scr.ensureRegionVisible(this, 0, rowY, getWidth(), rowHeight);
+                    if (scr != null && rowY != null && focusedRow < rowY.length && rowHeights != null && focusedRow < rowHeights.length) {
+                        scr.ensureRegionVisible(this, 0, rowY[focusedRow], getWidth(), rowHeights[focusedRow]);
                     }
+                    return true;
+                }
+            } else if (dx > 0) {
+                if (focusedCol < colCount - 1) {
+                    focusedCol++;
+                    invalidate();
+                    return true;
+                }
+            } else if (dx < 0) {
+                if (focusedCol > 0) {
+                    focusedCol--;
+                    invalidate();
                     return true;
                 }
             }
@@ -509,15 +857,27 @@ public class RichTextParser {
         }
 
         public void getFocusRect(XYRect rect) {
-            rect.set(0, 2 + focusedRow * rowHeight, getWidth(), rowHeight);
+            if (rowY != null && focusedRow >= 0 && focusedRow < rowY.length && rowHeights != null && focusedRow < rowHeights.length) {
+                rect.set(0, rowY[focusedRow], getWidth(), rowHeights[focusedRow]);
+            } else {
+                rect.set(0, 0, getWidth(), 20);
+            }
         }
 
         protected void drawFocus(Graphics g, boolean on) {
-            if (on) {
+            if (on && rowY != null && focusedRow >= 0 && focusedRow < rowY.length) {
                 boolean dark = AppSettings.getInstance().isDarkMode();
                 g.setColor(dark ? 0x9999AA : 0x888888);
-                int y = 2 + focusedRow * rowHeight;
-                g.fillRect(7, y + 4, 2, baseFont.getHeight());
+                int y = rowY[focusedRow] + 4;
+                int x = 7;
+                if (colWidths != null && focusedCol >= 0 && focusedCol < colWidths.length) {
+                    int cellX = 5;
+                    for (int c = 0; c < focusedCol; c++) {
+                        cellX += colWidths[c];
+                    }
+                    x = cellX + 2;
+                }
+                g.fillRect(x, y, 2, baseFont.getHeight());
             }
         }
 
@@ -530,21 +890,90 @@ public class RichTextParser {
         }
 
         protected void layout(int width, int height) {
+            int numRows = rows.size();
+            rowHeights = new int[numRows];
+            rowY = new int[numRows];
+            wrappedCells = new Vector[numRows][colCount];
+
             int tableWidth = width - 10;
             colWidths = new int[colCount];
-            int eachCol = tableWidth / colCount;
+
+            int[] colWeights = new int[colCount];
+            int totalWeight = 0;
             for (int c = 0; c < colCount; c++) {
-                colWidths[c] = eachCol;
+                int maxLen = 3;
+                boolean onlyCheckboxes = true;
+                for (int r = 0; r < numRows; r++) {
+                    Vector rowCells = (Vector) rows.elementAt(r);
+                    if (c < rowCells.size()) {
+                        String cell = (String) rowCells.elementAt(c);
+                        if (!isCellCheckbox(cell)) {
+                            onlyCheckboxes = false;
+                        }
+                        if (cell.length() > maxLen) {
+                            maxLen = cell.length();
+                        }
+                    }
+                }
+                if (onlyCheckboxes) {
+                    colWeights[c] = 4;
+                } else {
+                    colWeights[c] = Math.min(30, Math.max(6, maxLen));
+                }
+                totalWeight += colWeights[c];
             }
-            int numRows = (headers != null && headers.size() > 0 ? 1 : 0) + (rows != null ? rows.size() : 0);
-            totalHeight = numRows * rowHeight + 4;
+            if (totalWeight <= 0) totalWeight = colCount;
+
+            int allocatedWidth = 0;
+            for (int c = 0; c < colCount; c++) {
+                if (c == colCount - 1) {
+                    colWidths[c] = Math.max(24, tableWidth - allocatedWidth);
+                } else {
+                    int w = (tableWidth * colWeights[c]) / totalWeight;
+                    if (w < 26) w = 26;
+                    colWidths[c] = w;
+                    allocatedWidth += w;
+                }
+            }
+
+            int curY = 2;
+            for (int r = 0; r < numRows; r++) {
+                Vector rowCells = (Vector) rows.elementAt(r);
+                boolean isHdr = isRowHeader(r);
+                Font font = isHdr ? boldFont : baseFont;
+                int fontH = font.getHeight();
+                int maxLinesInRow = 1;
+
+                rowY[r] = curY;
+
+                for (int c = 0; c < colCount; c++) {
+                    String cellText = c < rowCells.size() ? (String) rowCells.elementAt(c) : "";
+                    boolean hasCb = isCellCheckbox(cellText);
+                    int availW = colWidths[c] - 8;
+                    if (hasCb) {
+                        availW -= (fontH + 2);
+                    }
+                    if (availW < 10) availW = 10;
+
+                    String textToWrap = hasCb ? getCellCheckboxLabel(cellText) : cellText;
+                    Vector lines = wrapText(textToWrap, font, availW);
+                    wrappedCells[r][c] = lines;
+                    if (lines.size() > maxLinesInRow) {
+                        maxLinesInRow = lines.size();
+                    }
+                }
+
+                rowHeights[r] = maxLinesInRow * fontH + 8;
+                curY += rowHeights[r];
+            }
+
+            totalHeight = curY + 2;
             setExtent(width, totalHeight);
         }
 
         protected void paint(Graphics g) {
             boolean dark = AppSettings.getInstance().isDarkMode();
             int xOffset = 5;
-            int curY = 2;
             int totalTableWidth = 0;
             for (int c = 0; c < colCount; c++) {
                 totalTableWidth += colWidths[c];
@@ -557,82 +986,104 @@ public class RichTextParser {
             int rowBgOdd = dark ? 0x0F172A : 0xF8FAFC;
             int dataTextColor = dark ? 0xF1F5F9 : 0x222222;
 
-            // Header row
-            if (headers != null && headers.size() > 0) {
-                g.setColor(headerBg);
-                g.fillRect(xOffset, curY, totalTableWidth, rowHeight);
-                g.setFont(boldFont);
+            int numRows = rows.size();
+            for (int r = 0; r < numRows; r++) {
+                int y = rowY[r];
+                int h = rowHeights[r];
+                boolean isHdr = isRowHeader(r);
+
+                int bg = isHdr ? headerBg : (r % 2 == 0 ? rowBgEven : rowBgOdd);
+                g.setColor(bg);
+                g.fillRect(xOffset, y, totalTableWidth, h);
+
+                Font font = isHdr ? boldFont : baseFont;
+                int fontH = font.getHeight();
+                g.setFont(font);
 
                 int cellX = xOffset;
                 for (int c = 0; c < colCount; c++) {
-                    String hText = c < headers.size() ? (String) headers.elementAt(c) : "";
-                    g.setColor(headerTextColor);
-                    g.drawText(truncateText(hText, colWidths[c] - 8, boldFont), cellX + 4, curY + 4);
-                    g.setColor(borderColor);
-                    g.drawLine(cellX, curY, cellX, curY + rowHeight);
-                    cellX += colWidths[c];
-                }
-                g.setColor(borderColor);
-                g.drawLine(cellX, curY, cellX, curY + rowHeight);
-                g.drawLine(xOffset, curY, xOffset + totalTableWidth, curY);
-                g.drawLine(xOffset, curY + rowHeight, xOffset + totalTableWidth, curY + rowHeight);
-                curY += rowHeight;
-            }
+                    int cw = colWidths[c];
 
-            // Data rows
-            if (rows != null) {
-                int numDataRows = rows.size();
-                for (int r = 0; r < numDataRows; r++) {
-                    Vector rowCells = (Vector) rows.elementAt(r);
-                    int bg = (r % 2 == 0) ? rowBgEven : rowBgOdd;
-                    g.setColor(bg);
-                    g.fillRect(xOffset, curY, totalTableWidth, rowHeight);
+                    Vector cellLines = (wrappedCells != null && r < wrappedCells.length && c < wrappedCells[r].length)
+                            ? wrappedCells[r][c] : null;
+                    Vector rawCells = (Vector) rows.elementAt(r);
+                    String rawCell = c < rawCells.size() ? (String) rawCells.elementAt(c) : "";
+                    boolean hasCb = isCellCheckbox(rawCell);
+                    boolean isChecked = isCellCheckboxChecked(rawCell);
 
-                    g.setFont(baseFont);
+                    int textX = cellX + 4;
+                    if (hasCb) {
+                        int boxSize = fontH - 2;
+                        int boxY = y + 4 + (fontH - boxSize) / 2;
+                        int boxX = cellX + 4;
 
-                    int cellX = xOffset;
-                    for (int c = 0; c < colCount; c++) {
-                        String cellText = c < rowCells.size() ? (String) rowCells.elementAt(c) : "";
-                        g.setColor(dataTextColor);
-                        g.drawText(truncateText(cellText, colWidths[c] - 8, baseFont), cellX + 4, curY + 4);
-                        g.setColor(borderColor);
-                        g.drawLine(cellX, curY, cellX, curY + rowHeight);
-                        cellX += colWidths[c];
+                        g.setColor(dark ? 0x94A3B8 : 0x64748B);
+                        g.drawRect(boxX, boxY, boxSize, boxSize);
+                        g.setColor(dark ? 0x0F172A : 0xFFFFFF);
+                        g.fillRect(boxX + 1, boxY + 1, boxSize - 1, boxSize - 1);
+
+                        if (isChecked) {
+                            g.setColor(dark ? 0x60A5FA : 0x1D4ED8);
+                            g.drawLine(boxX + 2, boxY + (boxSize / 2), boxX + (boxSize / 2) - 1, boxY + boxSize - 3);
+                            g.drawLine(boxX + (boxSize / 2) - 1, boxY + boxSize - 3, boxX + boxSize - 2, boxY + 2);
+                            g.drawLine(boxX + 2, boxY + (boxSize / 2) - 1, boxX + (boxSize / 2) - 1, boxY + boxSize - 4);
+                            g.drawLine(boxX + (boxSize / 2) - 1, boxY + boxSize - 4, boxX + boxSize - 2, boxY + 1);
+                        }
+                        textX += boxSize + 4;
                     }
-                    g.setColor(borderColor);
-                    g.drawLine(cellX, curY, cellX, curY + rowHeight);
-                    g.drawLine(xOffset, curY + rowHeight, xOffset + totalTableWidth, curY + rowHeight);
-                    curY += rowHeight;
-                }
-            }
-        }
 
-        private String truncateText(String text, int maxWidth, Font font) {
-            if (text == null) {
-                return "";
-            }
-            if (font.getAdvance(text) <= maxWidth) {
-                return text;
-            }
-            int len = text.length();
-            for (int i = len - 1; i >= 1; i--) {
-                String sub = text.substring(0, i) + "..";
-                if (font.getAdvance(sub) <= maxWidth) {
-                    return sub;
+                    if (cellLines != null) {
+                        g.setColor(isHdr ? headerTextColor : dataTextColor);
+                        for (int l = 0; l < cellLines.size(); l++) {
+                            String lineStr = (String) cellLines.elementAt(l);
+                            g.drawText(lineStr, textX, y + 4 + l * fontH);
+                        }
+                    }
+
+                    g.setColor(borderColor);
+                    g.drawLine(cellX, y, cellX, y + h);
+
+                    cellX += cw;
                 }
+
+                g.setColor(borderColor);
+                g.drawLine(cellX, y, cellX, y + h);
+
+                g.drawLine(xOffset, y, xOffset + totalTableWidth, y);
+                g.drawLine(xOffset, y + h, xOffset + totalTableWidth, y + h);
             }
-            return text;
         }
     }
 
     // ==========================================
     // Callout & Bullet Item Helpers
     // ==========================================
-    private static String stripStarPrefix(String str) {
-        if (str.startsWith("*")) {
-            return str.substring(1).trim();
+    private static String stripCalloutPrefix(String str) {
+        if (str == null) return "";
+        String s = str.trim();
+        if (s.startsWith("* ") || s.startsWith("> ")) {
+            return s.substring(2).trim();
+        } else if (s.startsWith("*") || s.startsWith(">")) {
+            return s.substring(1).trim();
         }
-        return str;
+        return s;
+    }
+
+    private static String stripStarPrefix(String str) {
+        return stripCalloutPrefix(str);
+    }
+
+    private static boolean isAlertStart(String text) {
+        if (text == null) return false;
+        String s = text.trim();
+        if (s.startsWith("* ") || s.startsWith("> ")) {
+            s = s.substring(2).trim();
+        } else if (s.startsWith("*") || s.startsWith(">")) {
+            s = s.substring(1).trim();
+        }
+        String u = s.toUpperCase();
+        return u.startsWith("[!NOTE]") || u.startsWith("[!TIP]") || u.startsWith("[!WARNING]")
+                || u.startsWith("[!IMPORTANT]") || u.startsWith("[!CAUTION]");
     }
 
     private static boolean isCalloutItem(String trimmed) {
@@ -680,9 +1131,19 @@ public class RichTextParser {
     }
 
     public static class BlockquoteField extends Field {
+        public static final int ALERT_NONE = 0;
+        public static final int ALERT_NOTE = 1;
+        public static final int ALERT_TIP = 2;
+        public static final int ALERT_WARNING = 3;
+        public static final int ALERT_IMPORTANT = 4;
+        public static final int ALERT_CAUTION = 5;
+
         private Vector lines;
+        private Vector wrappedLines;
         private int cachedHeight;
         private int focusedLine = 0;
+        private int alertType = ALERT_NONE;
+        private String alertTitle = null;
         /**
          * Source line index in the notes string this field was rendered from (-1 if
          * unknown).
@@ -692,6 +1153,48 @@ public class RichTextParser {
         public BlockquoteField(Vector lines) {
             super(Field.FOCUSABLE);
             this.lines = lines != null ? lines : new Vector();
+            detectAlert();
+        }
+
+        private void detectAlert() {
+            if (lines.size() == 0) return;
+            String first = ((String) lines.elementAt(0)).trim();
+            String upper = first.toUpperCase();
+            int tagLen = 0;
+            if (upper.startsWith("[!NOTE]")) {
+                alertType = ALERT_NOTE;
+                alertTitle = "NOTE";
+                tagLen = 7;
+            } else if (upper.startsWith("[!TIP]")) {
+                alertType = ALERT_TIP;
+                alertTitle = "TIP";
+                tagLen = 6;
+            } else if (upper.startsWith("[!WARNING]")) {
+                alertType = ALERT_WARNING;
+                alertTitle = "WARNING";
+                tagLen = 10;
+            } else if (upper.startsWith("[!IMPORTANT]")) {
+                alertType = ALERT_IMPORTANT;
+                alertTitle = "IMPORTANT";
+                tagLen = 12;
+            } else if (upper.startsWith("[!CAUTION]")) {
+                alertType = ALERT_CAUTION;
+                alertTitle = "CAUTION";
+                tagLen = 10;
+            }
+
+            if (alertTitle != null) {
+                String remainder = first.substring(tagLen).trim();
+                if (remainder.length() > 0) {
+                    lines.setElementAt(remainder, 0);
+                } else {
+                    if (lines.size() > 1) {
+                        lines.removeElementAt(0);
+                    } else {
+                        lines.setElementAt("", 0);
+                    }
+                }
+            }
         }
 
         public int getPreferredWidth() {
@@ -703,17 +1206,33 @@ public class RichTextParser {
         }
 
         protected void layout(int width, int height) {
-            cachedHeight = Math.max(lines.size(), 1) * (italicFont.getHeight() + 4) + 8;
+            int textWidth = width - 10 - 18;
+            if (textWidth < 50) textWidth = 50;
+            wrappedLines = new Vector();
+            for (int i = 0; i < lines.size(); i++) {
+                String l = (String) lines.elementAt(i);
+                Vector w = wrapText(l, italicFont, textWidth);
+                for (int k = 0; k < w.size(); k++) {
+                    wrappedLines.addElement(w.elementAt(k));
+                }
+            }
+            if (wrappedLines.size() == 0) {
+                wrappedLines.addElement("");
+            }
+            int fontH = italicFont.getHeight();
+            int headerH = (alertTitle != null) ? (boldFont.getHeight() + 4) : 0;
+            cachedHeight = headerH + wrappedLines.size() * (fontH + 4) + 12;
             setExtent(width, cachedHeight);
         }
 
         protected void onFocus(int direction) {
             super.onFocus(direction);
-            if (lines != null && lines.size() > 0) {
+            int count = wrappedLines != null ? wrappedLines.size() : lines.size();
+            if (count > 0) {
                 if (direction > 0) {
                     focusedLine = 0;
                 } else if (direction < 0) {
-                    focusedLine = lines.size() - 1;
+                    focusedLine = count - 1;
                 }
             } else {
                 focusedLine = 0;
@@ -727,15 +1246,16 @@ public class RichTextParser {
         }
 
         protected boolean navigationMovement(int dx, int dy, int status, int time) {
-            int numLines = lines != null ? lines.size() : 1;
+            int numLines = wrappedLines != null ? wrappedLines.size() : 1;
+            int headerH = (alertTitle != null) ? (boldFont.getHeight() + 4) : 0;
+            int lineH = italicFont.getHeight() + 4;
             if (dy > 0) {
                 if (focusedLine < numLines - 1) {
                     focusedLine++;
                     invalidate();
                     net.rim.device.api.ui.Screen scr = getScreen();
                     if (scr != null) {
-                        int lineH = italicFont.getHeight() + 4;
-                        scr.ensureRegionVisible(this, 0, 6 + focusedLine * lineH, getWidth(), lineH);
+                        scr.ensureRegionVisible(this, 0, 6 + headerH + focusedLine * lineH, getWidth(), lineH);
                     }
                     return true;
                 }
@@ -745,8 +1265,7 @@ public class RichTextParser {
                     invalidate();
                     net.rim.device.api.ui.Screen scr = getScreen();
                     if (scr != null) {
-                        int lineH = italicFont.getHeight() + 4;
-                        scr.ensureRegionVisible(this, 0, 6 + focusedLine * lineH, getWidth(), lineH);
+                        scr.ensureRegionVisible(this, 0, 6 + headerH + focusedLine * lineH, getWidth(), lineH);
                     }
                     return true;
                 }
@@ -755,16 +1274,18 @@ public class RichTextParser {
         }
 
         public void getFocusRect(XYRect rect) {
+            int headerH = (alertTitle != null) ? (boldFont.getHeight() + 4) : 0;
             int lineH = italicFont.getHeight() + 4;
-            rect.set(0, 6 + focusedLine * lineH, getWidth(), lineH);
+            rect.set(0, 6 + headerH + focusedLine * lineH, getWidth(), lineH);
         }
 
         protected void drawFocus(Graphics g, boolean on) {
             if (on) {
                 boolean dark = AppSettings.getInstance().isDarkMode();
                 g.setColor(dark ? 0x9999AA : 0x888888);
+                int headerH = (alertTitle != null) ? (boldFont.getHeight() + 4) : 0;
                 int lineH = italicFont.getHeight() + 4;
-                int y = 6 + focusedLine * lineH;
+                int y = 6 + headerH + focusedLine * lineH;
                 g.fillRect(11, y, 2, italicFont.getHeight());
             }
         }
@@ -772,22 +1293,59 @@ public class RichTextParser {
         protected void paint(Graphics g) {
             boolean dark = AppSettings.getInstance().isDarkMode();
             int w = getWidth() - 10;
-            int bg = dark ? 0x180D26 : 0xFAF8FC;
-            int bar = dark ? 0xC084FC : 0x7719AA;
-            int textColor = dark ? 0xF3E8FF : 0x4A5568;
+            int bg, bar, textColor;
+
+            switch (alertType) {
+                case ALERT_NOTE:
+                    bg = dark ? 0x0F172A : 0xEFF6FF;
+                    bar = dark ? 0x60A5FA : 0x2563EB;
+                    textColor = dark ? 0xDBEAFE : 0x1E3A8A;
+                    break;
+                case ALERT_TIP:
+                    bg = dark ? 0x052E16 : 0xF0FDF4;
+                    bar = dark ? 0x4ADE80 : 0x16A34A;
+                    textColor = dark ? 0xDCFCE7 : 0x14532D;
+                    break;
+                case ALERT_WARNING:
+                    bg = dark ? 0x281B04 : 0xFFFBEB;
+                    bar = dark ? 0xFBBF24 : 0xD97706;
+                    textColor = dark ? 0xFEF3C7 : 0x78350F;
+                    break;
+                case ALERT_IMPORTANT:
+                case ALERT_CAUTION:
+                    bg = dark ? 0x2D0606 : 0xFEF2F2;
+                    bar = dark ? 0xF87171 : 0xDC2626;
+                    textColor = dark ? 0xFEE2E2 : 0x7F1D1D;
+                    break;
+                default:
+                    bg = dark ? 0x180D26 : 0xFAF8FC;
+                    bar = dark ? 0xC084FC : 0x7719AA;
+                    textColor = dark ? 0xF3E8FF : 0x4A5568;
+                    break;
+            }
 
             g.setColor(bg);
             g.fillRect(5, 2, w, cachedHeight - 4);
             g.setColor(bar);
             g.fillRect(5, 2, 4, cachedHeight - 4);
 
+            int y = 6;
+            if (alertTitle != null) {
+                g.setFont(boldFont);
+                g.setColor(bar);
+                g.drawText(alertTitle, 16, y);
+                y += boldFont.getHeight() + 4;
+            }
+
             g.setFont(italicFont);
             g.setColor(textColor);
-            int y = 6;
-            for (int i = 0; i < lines.size(); i++) {
-                String l = (String) lines.elementAt(i);
-                g.drawText(l, 16, y);
-                y += italicFont.getHeight() + 4;
+            int fontH = italicFont.getHeight();
+            if (wrappedLines != null) {
+                for (int i = 0; i < wrappedLines.size(); i++) {
+                    String l = (String) wrappedLines.elementAt(i);
+                    g.drawText(l, 16, y);
+                    y += fontH + 4;
+                }
             }
         }
     }
@@ -797,6 +1355,7 @@ public class RichTextParser {
     // ==========================================
     public static class CodeBlockField extends Field {
         private Vector codeLines;
+        private Vector wrappedLines;
         private int cachedHeight;
         private int focusedLine = 0;
         /**
@@ -819,17 +1378,31 @@ public class RichTextParser {
         }
 
         protected void layout(int width, int height) {
-            cachedHeight = Math.max(codeLines.size(), 1) * (monoFont.getHeight() + 3) + 10;
+            int textWidth = width - 10 - 14;
+            wrappedLines = new Vector();
+            for (int i = 0; i < codeLines.size(); i++) {
+                String l = (String) codeLines.elementAt(i);
+                Vector w = wrapText(l, monoFont, textWidth);
+                for (int k = 0; k < w.size(); k++) {
+                    wrappedLines.addElement(w.elementAt(k));
+                }
+            }
+            if (wrappedLines.size() == 0) {
+                wrappedLines.addElement("");
+            }
+            int fontH = monoFont.getHeight();
+            cachedHeight = wrappedLines.size() * (fontH + 3) + 12;
             setExtent(width, cachedHeight);
         }
 
         protected void onFocus(int direction) {
             super.onFocus(direction);
-            if (codeLines != null && codeLines.size() > 0) {
+            int count = wrappedLines != null ? wrappedLines.size() : codeLines.size();
+            if (count > 0) {
                 if (direction > 0) {
                     focusedLine = 0;
                 } else if (direction < 0) {
-                    focusedLine = codeLines.size() - 1;
+                    focusedLine = count - 1;
                 }
             } else {
                 focusedLine = 0;
@@ -843,7 +1416,7 @@ public class RichTextParser {
         }
 
         protected boolean navigationMovement(int dx, int dy, int status, int time) {
-            int numLines = codeLines != null ? codeLines.size() : 1;
+            int numLines = wrappedLines != null ? wrappedLines.size() : 1;
             if (dy > 0) {
                 if (focusedLine < numLines - 1) {
                     focusedLine++;
@@ -900,10 +1473,13 @@ public class RichTextParser {
             g.setFont(monoFont);
             g.setColor(textColor);
             int y = 6;
-            for (int i = 0; i < codeLines.size(); i++) {
-                String l = (String) codeLines.elementAt(i);
-                g.drawText(l, 12, y);
-                y += monoFont.getHeight() + 3;
+            int fontH = monoFont.getHeight();
+            if (wrappedLines != null) {
+                for (int i = 0; i < wrappedLines.size(); i++) {
+                    String l = (String) wrappedLines.elementAt(i);
+                    g.drawText(l, 12, y);
+                    y += fontH + 3;
+                }
             }
         }
     }
@@ -920,7 +1496,7 @@ public class RichTextParser {
                 || s.startsWith("• ")) {
             s = s.substring(2).trim();
         }
-        return s.startsWith("[ ]") || StringUtils.startsWithIgnoreCase(s, "[x]");
+        return s.startsWith("[ ]") || StringUtils.startsWithIgnoreCase(s, "[x]") || s.startsWith("[-]") || s.startsWith("[~]");
     }
 
     private static void renderTaskItem(Manager targetManager, final Page page, String line, final int lineIndex,
@@ -930,9 +1506,13 @@ public class RichTextParser {
                 || s.startsWith("• ")) {
             s = s.substring(2).trim();
         }
-        final boolean isChecked = StringUtils.startsWithIgnoreCase(s, "[x]");
+        final boolean isCancelled = s.startsWith("[-]") || s.startsWith("[~]");
+        final boolean isChecked = StringUtils.startsWithIgnoreCase(s, "[x]") || isCancelled;
         int closeBracket = s.indexOf(']');
         String taskLabel = closeBracket >= 0 ? s.substring(closeBracket + 1).trim() : s;
+        if (isCancelled && taskLabel.length() > 0) {
+            taskLabel = "[CANCELLED] " + taskLabel;
+        }
 
         int level = (leadingSpaces / 2) + 1;
         StringBuffer indent = new StringBuffer();
@@ -975,6 +1555,10 @@ public class RichTextParser {
                     updated = StringUtils.replace(l, "[x]", "[ ]");
                 } else if (l.indexOf("[X]") >= 0) {
                     updated = StringUtils.replace(l, "[X]", "[ ]");
+                } else if (l.indexOf("[-]") >= 0) {
+                    updated = StringUtils.replace(l, "[-]", "[ ]");
+                } else if (l.indexOf("[~]") >= 0) {
+                    updated = StringUtils.replace(l, "[~]", "[ ]");
                 } else {
                     updated = l;
                 }
@@ -1207,8 +1791,10 @@ public class RichTextParser {
         }
 
         // Fast path: no markup characters at all
-        if (line.indexOf('*') < 0 && line.indexOf('_') < 0 && line.indexOf('~') < 0
-                && line.indexOf('=') < 0 && line.indexOf('`') < 0) {
+        boolean hasMarkup = line.indexOf('*') >= 0 || line.indexOf('_') >= 0 || line.indexOf('~') >= 0
+                || line.indexOf('=') >= 0 || line.indexOf('`') >= 0 || line.indexOf('<') >= 0
+                || line.indexOf('[') >= 0 || line.indexOf("http://") >= 0 || line.indexOf("https://") >= 0;
+        if (!hasMarkup) {
             ThemedLabelField lbl = new ThemedLabelField(line, baseFont, LabelField.FOCUSABLE, 0x000000, 0xF1F5F9);
             lbl.srcLine = srcLineIdx;
             targetManager.add(lbl);
@@ -1228,7 +1814,7 @@ public class RichTextParser {
         // Single plain segment — no complex wrapper needed
         if (segCount == 1) {
             SpanSegment seg = (SpanSegment) segments.elementAt(0);
-            if (!seg.isUnderline && !seg.isStrike && !seg.isHighlight && !seg.isCode) {
+            if (!seg.isUnderline && !seg.isStrike && !seg.isHighlight && !seg.isCode && !seg.isLink && !seg.isKbd) {
                 ThemedLabelField lbl = new ThemedLabelField(seg.text, getFontForSegment(seg), LabelField.FOCUSABLE,
                         0x000000, 0xF1F5F9);
                 lbl.srcLine = srcLineIdx;
@@ -1251,9 +1837,22 @@ public class RichTextParser {
         public boolean isStrike;
         public boolean isHighlight;
         public boolean isCode;
+        public boolean isLink;
+        public boolean isKbd;
+        public String linkUrl;
 
         public SpanSegment(String text, boolean bold, boolean italic, boolean underline,
                 boolean strike, boolean highlight, boolean code) {
+            this(text, bold, italic, underline, strike, highlight, code, false, false, null);
+        }
+
+        public SpanSegment(String text, boolean bold, boolean italic, boolean underline,
+                boolean strike, boolean highlight, boolean code, boolean isLink) {
+            this(text, bold, italic, underline, strike, highlight, code, isLink, false, null);
+        }
+
+        public SpanSegment(String text, boolean bold, boolean italic, boolean underline,
+                boolean strike, boolean highlight, boolean code, boolean isLink, boolean isKbd, String linkUrl) {
             this.text = text;
             this.isBold = bold;
             this.isItalic = italic;
@@ -1261,12 +1860,17 @@ public class RichTextParser {
             this.isStrike = strike;
             this.isHighlight = highlight;
             this.isCode = code;
+            this.isLink = isLink;
+            this.isKbd = isKbd;
+            this.linkUrl = linkUrl;
         }
     }
 
     private static Font getFontForSegment(SpanSegment seg) {
-        if (seg.isCode) {
+        if (seg.isKbd || seg.isCode) {
             return monoFont;
+        } else if (seg.isBold && seg.isItalic) {
+            return boldItalicFont;
         } else if (seg.isBold) {
             return boldFont;
         } else if (seg.isItalic) {
@@ -1376,7 +1980,7 @@ public class RichTextParser {
                         i = len;
                     }
 
-                    currentWord.addFragment(chunk, f, seg.isUnderline, seg.isStrike, seg.isHighlight, seg.isCode);
+                    currentWord.addFragment(chunk, f, seg.isUnderline, seg.isStrike, seg.isHighlight, seg.isCode, seg.isLink);
 
                     if (chunk.endsWith(" ")) {
                         words.addElement(currentWord);
@@ -1428,6 +2032,7 @@ public class RichTextParser {
             int defaultTextColor = dark ? 0xF1F5F9 : 0x000000;
             int codeTextColor = dark ? 0xFB7185 : 0x990000;
             int highlightTextColor = dark ? 0xFEF08A : 0x000000;
+            int linkTextColor = dark ? 0x60A5FA : 0x1D4ED8;
 
             int y = 2;
             int numLines = lineLayouts.size();
@@ -1451,7 +2056,9 @@ public class RichTextParser {
                             g.fillRect(x, y - 1, frag.width, fontH + 2);
                         }
 
-                        if (frag.isHighlight) {
+                        if (frag.isLink) {
+                            g.setColor(linkTextColor);
+                        } else if (frag.isHighlight) {
                             g.setColor(highlightTextColor);
                         } else if (frag.isCode) {
                             g.setColor(codeTextColor);
@@ -1461,9 +2068,9 @@ public class RichTextParser {
                         g.setFont(frag.font);
                         g.drawText(frag.text, x, y);
 
-                        // Underline
-                        if (frag.isUnderline) {
-                            g.setColor(dark ? 0xF1F5F9 : 0x000000);
+                        // Underline or link underline
+                        if (frag.isUnderline || frag.isLink) {
+                            g.setColor(frag.isLink ? linkTextColor : (dark ? 0xF1F5F9 : 0x000000));
                             g.drawLine(x, y + fontH - 1, x + frag.width, y + fontH - 1);
                         }
 
@@ -1486,10 +2093,32 @@ public class RichTextParser {
         public int totalWidth = 0;
 
         public void addFragment(String text, Font font, boolean isUnderline, boolean isStrike,
-                boolean isHighlight, boolean isCode) {
+                boolean isHighlight, boolean isCode, boolean isLink) {
+            int maxW = Graphics.getScreenWidth() - 20;
+            if (maxW <= 0) maxW = 200;
             int w = font.getAdvance(text);
-            fragments.addElement(new Fragment(text, font, w, isUnderline, isStrike, isHighlight, isCode));
-            totalWidth += w;
+            if (w <= maxW || text.length() <= 3) {
+                fragments.addElement(new Fragment(text, font, w, isUnderline, isStrike, isHighlight, isCode, isLink));
+                totalWidth += w;
+            } else {
+                int start = 0;
+                for (int c = 1; c <= text.length(); c++) {
+                    String sub = text.substring(start, c);
+                    if (font.getAdvance(sub) > maxW && c > start + 1) {
+                        String part = text.substring(start, c - 1);
+                        int pw = font.getAdvance(part);
+                        fragments.addElement(new Fragment(part, font, pw, isUnderline, isStrike, isHighlight, isCode, isLink));
+                        totalWidth += pw;
+                        start = c - 1;
+                    }
+                }
+                if (start < text.length()) {
+                    String part = text.substring(start);
+                    int pw = font.getAdvance(part);
+                    fragments.addElement(new Fragment(part, font, pw, isUnderline, isStrike, isHighlight, isCode, isLink));
+                    totalWidth += pw;
+                }
+            }
         }
     }
 
@@ -1501,9 +2130,10 @@ public class RichTextParser {
         public boolean isStrike;
         public boolean isHighlight;
         public boolean isCode;
+        public boolean isLink;
 
         public Fragment(String text, Font font, int width, boolean isUnderline, boolean isStrike,
-                boolean isHighlight, boolean isCode) {
+                boolean isHighlight, boolean isCode, boolean isLink) {
             this.text = text;
             this.font = font;
             this.width = width;
@@ -1511,12 +2141,13 @@ public class RichTextParser {
             this.isStrike = isStrike;
             this.isHighlight = isHighlight;
             this.isCode = isCode;
+            this.isLink = isLink;
         }
     }
 
     /**
-     * Parses a line for inline spans: bold (**), italic (*), underline (__),
-     * strikethrough (~~), highlight (==), and inline code (`).
+     * Parses a line for inline spans: bold (*** or **), italic (*), underline (__),
+     * strikethrough (~~), highlight (==), inline code (`), kbd (<kbd>), and links ([text](url)).
      */
     public static Vector parseInlineSpans(String line) {
         Vector segments = new Vector();
@@ -1531,11 +2162,21 @@ public class RichTextParser {
         StringBuffer current = new StringBuffer();
 
         while (i < len) {
-            // ** Bold
-            if (i + 1 < len && line.charAt(i) == '*' && line.charAt(i + 1) == '*') {
+            // *** Bold + Italic
+            if (i + 2 < len && line.charAt(i) == '*' && line.charAt(i + 1) == '*' && line.charAt(i + 2) == '*') {
                 if (current.length() > 0) {
                     segments.addElement(
-                            new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, code));
+                            new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, code, false));
+                    current = new StringBuffer();
+                }
+                bold = !bold;
+                italic = !italic;
+                i += 3;
+            } else if (i + 1 < len && line.charAt(i) == '*' && line.charAt(i + 1) == '*') {
+                // ** Bold
+                if (current.length() > 0) {
+                    segments.addElement(
+                            new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, code, false));
                     current = new StringBuffer();
                 }
                 bold = !bold;
@@ -1544,7 +2185,7 @@ public class RichTextParser {
                 // __ Underline
                 if (current.length() > 0) {
                     segments.addElement(
-                            new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, code));
+                            new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, code, false));
                     current = new StringBuffer();
                 }
                 underline = !underline;
@@ -1553,7 +2194,7 @@ public class RichTextParser {
                 // ~~ Strikethrough
                 if (current.length() > 0) {
                     segments.addElement(
-                            new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, code));
+                            new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, code, false));
                     current = new StringBuffer();
                 }
                 strike = !strike;
@@ -1562,25 +2203,57 @@ public class RichTextParser {
                 // == Highlight
                 if (current.length() > 0) {
                     segments.addElement(
-                            new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, code));
+                            new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, code, false));
                     current = new StringBuffer();
                 }
                 highlight = !highlight;
                 i += 2;
+            } else if (i + 4 < len && line.substring(i, i + 5).equalsIgnoreCase("<kbd>")) {
+                // <kbd> keyboard key
+                if (current.length() > 0) {
+                    segments.addElement(
+                            new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, code, false));
+                    current = new StringBuffer();
+                }
+                code = true;
+                highlight = true;
+                i += 5;
+            } else if (i + 5 < len && line.substring(i, i + 6).equalsIgnoreCase("</kbd>")) {
+                // </kbd>
+                if (current.length() > 0) {
+                    segments.addElement(
+                            new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, code, false));
+                    current = new StringBuffer();
+                }
+                code = false;
+                highlight = false;
+                i += 6;
             } else if (line.charAt(i) == '`') {
                 // ` Inline Code
                 if (current.length() > 0) {
                     segments.addElement(
-                            new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, code));
+                            new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, code, false));
                     current = new StringBuffer();
                 }
                 code = !code;
                 i += 1;
+            } else if (line.charAt(i) == '[' && line.indexOf("](", i) > i && line.indexOf(')', line.indexOf("](", i)) > 0) {
+                // Inline link [text](url)
+                int mid = line.indexOf("](", i);
+                int close = line.indexOf(')', mid);
+                if (current.length() > 0) {
+                    segments.addElement(
+                            new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, code, false));
+                    current = new StringBuffer();
+                }
+                String linkText = line.substring(i + 1, mid);
+                segments.addElement(new SpanSegment(linkText, bold, italic, true, strike, highlight, code, true));
+                i = close + 1;
             } else if (line.charAt(i) == '*') {
                 // * Italic
                 if (current.length() > 0) {
                     segments.addElement(
-                            new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, code));
+                            new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, code, false));
                     current = new StringBuffer();
                 }
                 italic = !italic;
@@ -1592,7 +2265,7 @@ public class RichTextParser {
         }
 
         if (current.length() > 0) {
-            segments.addElement(new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, code));
+            segments.addElement(new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, code, false));
         }
 
         return segments;
@@ -1605,12 +2278,17 @@ public class RichTextParser {
         if (text == null) {
             return "";
         }
-        String res = StringUtils.replace(text, "**", "");
+        String res = StringUtils.replace(text, "***", "");
+        res = StringUtils.replace(res, "**", "");
         res = StringUtils.replace(res, "*", "");
         res = StringUtils.replace(res, "__", "");
         res = StringUtils.replace(res, "~~", "");
         res = StringUtils.replace(res, "==", "");
         res = StringUtils.replace(res, "`", "");
+        res = StringUtils.replace(res, "<kbd>", "");
+        res = StringUtils.replace(res, "</kbd>", "");
+        res = StringUtils.replace(res, "<KBD>", "");
+        res = StringUtils.replace(res, "</KBD>", "");
         return res;
     }
 }

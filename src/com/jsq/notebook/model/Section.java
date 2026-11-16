@@ -61,6 +61,18 @@ public class Section implements Persistable {
         return id;
     }
 
+    public void setId(long id) {
+        this.id = id;
+    }
+
+    public long getNotebookId() {
+        return notebookId;
+    }
+
+    public void setNotebookId(long notebookId) {
+        this.notebookId = notebookId;
+    }
+
     public String getName() {
         return name;
     }
@@ -79,8 +91,20 @@ public class Section implements Persistable {
         this.modifiedTime = System.currentTimeMillis();
     }
 
+    public long getCreatedTime() {
+        return createdTime;
+    }
+
+    public void setCreatedTime(long createdTime) {
+        this.createdTime = createdTime;
+    }
+
     public long getModifiedTime() {
         return modifiedTime;
+    }
+
+    public void setModifiedTime(long modifiedTime) {
+        this.modifiedTime = modifiedTime;
     }
 
     public Vector getFieldDefinitions() {

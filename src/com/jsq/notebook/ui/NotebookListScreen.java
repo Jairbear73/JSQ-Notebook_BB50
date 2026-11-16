@@ -1,5 +1,6 @@
 package com.jsq.notebook.ui;
 
+import com.jsq.notebook.export.NotebookBackupManager;
 import com.jsq.notebook.export.NotebookImportManager;
 import com.jsq.notebook.export.PageExportManager;
 import com.jsq.notebook.model.Notebook;
@@ -346,6 +347,214 @@ public class NotebookListScreen extends MainScreen implements ListFieldCallback 
         UiApplication.getUiApplication().pushScreen(picker);
     }
 
+    private void promptBackupAllNotebooks() {
+        if (notebooks == null || notebooks.size() == 0) {
+            Dialog.alert("There are no notebooks to back up.");
+            return;
+        }
+
+        FilePickerPopup picker = new FilePickerPopup(
+                FilePickerPopup.MODE_DIRECTORY_SELECT,
+                new FilePickerPopup.FilePickerListener() {
+                    public void onFileSelected(final String selectedDirUrl) {
+                        confirmBackupFileName(selectedDirUrl);
+                    }
+
+                    public void onCancelled() {
+                    }
+                });
+        UiApplication.getUiApplication().pushScreen(picker);
+    }
+
+    private void confirmBackupFileName(final String baseDirUrl) {
+        String defaultFileName = "JSQNotebooks_Backup_" +
+                DateUtils.formatCompactDateTime(System.currentTimeMillis()) + ".jnbb";
+
+        final EditField fileField = new EditField("File: ", defaultFileName);
+
+        final PopupScreen popup = new PopupScreen(new VerticalFieldManager()) {
+            protected void makeMenu(Menu menu, int instance) {
+                menu.add(new MenuItem("Start Backup", 100, 10) {
+                    public void run() {
+                        String name = fileField.getText().trim();
+                        close();
+                        startBackup(baseDirUrl, name);
+                    }
+                });
+                menu.add(new MenuItem("Cancel", 200, 20) {
+                    public void run() {
+                        close();
+                    }
+                });
+            }
+        };
+
+        LabelField title = new LabelField("Backup All Notebooks");
+        title.setFont(Font.getDefault().derive(Font.BOLD));
+        popup.add(title);
+        popup.add(new SeparatorField());
+
+        int count = notebooks != null ? notebooks.size() : 0;
+        LabelField info = new LabelField("Backing up " + count + " notebook" + (count == 1 ? "" : "s") + " to:");
+        info.setFont(Font.getDefault().derive(Font.ITALIC));
+        popup.add(info);
+
+        LabelField dirLabel = new LabelField(baseDirUrl);
+        popup.add(dirLabel);
+        popup.add(new SeparatorField());
+        popup.add(fileField);
+        popup.add(new SeparatorField());
+
+        HorizontalFieldManager buttonBar = new HorizontalFieldManager(Field.FIELD_HCENTER);
+        ButtonField okBtn = new ButtonField("Backup", ButtonField.CONSUME_CLICK);
+        okBtn.setChangeListener(new FieldChangeListener() {
+            public void fieldChanged(Field field, int context) {
+                String name = fileField.getText().trim();
+                popup.close();
+                startBackup(baseDirUrl, name);
+            }
+        });
+        ButtonField cancelBtn = new ButtonField("Cancel", ButtonField.CONSUME_CLICK);
+        cancelBtn.setChangeListener(new FieldChangeListener() {
+            public void fieldChanged(Field field, int context) {
+                popup.close();
+            }
+        });
+        buttonBar.add(okBtn);
+        buttonBar.add(cancelBtn);
+        popup.add(buttonBar);
+
+        UiApplication.getUiApplication().pushScreen(popup);
+    }
+
+    private void startBackup(String baseDirUrl, String fileName) {
+        if (fileName == null || fileName.length() == 0) {
+            fileName = "JSQNotebooks_Backup.jnbb";
+        }
+        if (!fileName.toLowerCase().endsWith(".jnbb")) {
+            fileName = fileName + ".jnbb";
+        }
+
+        String dir = baseDirUrl;
+        if (!dir.endsWith("/")) {
+            dir = dir + "/";
+        }
+        final String destFileUrl = dir + fileName;
+        final String displayFileName = fileName;
+
+        final ProgressPopupScreen progress = new ProgressPopupScreen("Backing Up Notebooks");
+        UiApplication.getUiApplication().pushScreen(progress);
+
+        new Thread(new Runnable() {
+            public void run() {
+                try {
+                    final NotebookBackupManager.BackupResult result = NotebookBackupManager.getInstance()
+                            .backupAll(destFileUrl, new NotebookBackupManager.ProgressListener() {
+                                public void onProgress(int current, int total, String status) {
+                                    progress.updateProgress(current, total, status);
+                                }
+                            });
+
+                    progress.finish();
+                    UiApplication.getUiApplication().invokeLater(new Runnable() {
+                        public void run() {
+                            Dialog.alert("Backup complete!\n\n" +
+                                    "Saved: " + displayFileName + "\n" +
+                                    result.getNotebookCount() + " notebook(s), " +
+                                    result.getSectionCount() + " section(s), " +
+                                    result.getPageCount() + " page(s), " +
+                                    result.getAttachmentCount() + " attachment(s) backed up.");
+                        }
+                    });
+                } catch (final Exception e) {
+                    progress.finish();
+                    UiApplication.getUiApplication().invokeLater(new Runnable() {
+                        public void run() {
+                            Dialog.alert("Backup failed:\n" + e.getMessage());
+                        }
+                    });
+                }
+            }
+        }).start();
+    }
+
+    private void promptRestoreNotebooks() {
+        FilePickerPopup picker = new FilePickerPopup(
+                FilePickerPopup.MODE_JNBB_SELECT,
+                new FilePickerPopup.FilePickerListener() {
+                    public void onFileSelected(final String selectedFileUrl) {
+                        confirmRestoreOptions(selectedFileUrl);
+                    }
+
+                    public void onCancelled() {
+                    }
+                });
+        UiApplication.getUiApplication().pushScreen(picker);
+    }
+
+    private void confirmRestoreOptions(final String fileUrl) {
+        String fileName = fileUrl;
+        int lastSlash = fileUrl.lastIndexOf('/');
+        if (lastSlash >= 0) {
+            fileName = fileUrl.substring(lastSlash + 1);
+        }
+
+        final boolean replace;
+        if (notebooks != null && notebooks.size() > 0) {
+            String question = "Restore notebooks from:\n" + fileName + "\n\n" +
+                    "Do you want to REPLACE current notebooks, or MERGE into them?\n\n" +
+                    "• YES = Replace all existing notebooks\n" +
+                    "• NO = Merge into existing notebooks";
+            int choice = Dialog.ask(Dialog.D_YES_NO, question, Dialog.NO);
+            if (choice != Dialog.YES && choice != Dialog.NO) {
+                return;
+            }
+            replace = (choice == Dialog.YES);
+        } else {
+            int choice = Dialog.ask(Dialog.D_YES_NO, "Restore notebooks from:\n" + fileName + "?", Dialog.YES);
+            if (choice != Dialog.YES) {
+                return;
+            }
+            replace = true;
+        }
+
+        final ProgressPopupScreen progress = new ProgressPopupScreen("Restoring Notebooks");
+        UiApplication.getUiApplication().pushScreen(progress);
+
+        new Thread(new Runnable() {
+            public void run() {
+                try {
+                    final NotebookBackupManager.RestoreResult result = NotebookBackupManager.getInstance()
+                            .restoreAll(fileUrl, replace, new NotebookBackupManager.ProgressListener() {
+                                public void onProgress(int current, int total, String status) {
+                                    progress.updateProgress(current, total, status);
+                                }
+                            });
+
+                    progress.finish();
+                    UiApplication.getUiApplication().invokeLater(new Runnable() {
+                        public void run() {
+                            refreshList();
+                            Dialog.alert("Restore complete!\n\n" +
+                                    result.getNotebookCount() + " notebook(s), " +
+                                    result.getSectionCount() + " section(s), " +
+                                    result.getPageCount() + " page(s), " +
+                                    result.getAttachmentCount() + " attachment(s) restored.");
+                        }
+                    });
+                } catch (final Exception e) {
+                    progress.finish();
+                    UiApplication.getUiApplication().invokeLater(new Runnable() {
+                        public void run() {
+                            refreshList();
+                            Dialog.alert("Restore failed:\n" + e.getMessage());
+                        }
+                    });
+                }
+            }
+        }).start();
+    }
+
     // ==========================================
     // Physical Menu Integration
     // ==========================================
@@ -373,6 +582,11 @@ public class NotebookListScreen extends MainScreen implements ListFieldCallback 
                     exportSelectedNotebook();
                 }
             });
+            menu.add(new MenuItem("Backup All", 145, 45) {
+                public void run() {
+                    promptBackupAllNotebooks();
+                }
+            });
         }
 
         menu.add(new MenuItem("New Notebook", 110, 15) {
@@ -384,6 +598,12 @@ public class NotebookListScreen extends MainScreen implements ListFieldCallback 
         menu.add(new MenuItem("Import", 150, 50) {
             public void run() {
                 promptImportNotebook();
+            }
+        });
+
+        menu.add(new MenuItem("Restore All", 155, 55) {
+            public void run() {
+                promptRestoreNotebooks();
             }
         });
 

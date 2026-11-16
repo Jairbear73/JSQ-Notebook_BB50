@@ -26,6 +26,14 @@ public class NotebookDatabase implements Persistable {
         return ++nextId;
     }
 
+    public synchronized long getNextId() {
+        return nextId;
+    }
+
+    public synchronized void setNextId(long nextId) {
+        this.nextId = nextId;
+    }
+
     public Vector getNotebooks() {
         if (notebooks == null) {
             notebooks = new Vector();
@@ -84,45 +92,89 @@ public class NotebookDatabase implements Persistable {
 
         samplePage.setNotes(
                 "# OneNote Features Demo\n" +
-                        "Welcome to the enhanced **JSQ Notebook** with full **OneNote Page** compatibility for **BlackBerry OS 5.0**!\n\n"
-                        +
-                        "## Inline Text Formatting\n" +
-                        "Supports **bold**, *italic*, __underlined__, ~~strikethrough~~, ==highlighted text==, and `inline code` spans.\n\n"
-                        +
-                        "### Daily Tasks (Interactive in View Mode)\n" +
-                        "[ ] Review OneNote page styling\n" +
-                        "[x] Implement markdown tables\n" +
-                        "[x] Add callouts & blockquotes\n" +
-                        "[ ] Toggle Dark Mode in Options menu\n\n" +
-                        "### Feature Support Matrix\n" +
-                        "| Feature | Syntax | Status |\n" +
-                        "|---|---|---|\n" +
-                        "| Checklists | [ ] and [x] | Interactive |\n" +
-                        "| Tables | Pipe Matrix | Formatted |\n" +
-                        "| Callouts | > Quote | Active |\n" +
-                        "| Code Blocks | ``` Code ``` | Monospaced |\n" +
-                        "| Dark Mode | View Invert | Supported |\n\n" +
-                        "* OneNote Tip: In View Mode, click checkboxes directly with the trackpad to toggle tasks without entering Edit Mode!\n\n"
-                        +
-                        "### Sample Code Block\n" +
-                        "```\n" +
-                        "// BlackBerry OS 5 Dark Mode\n" +
-                        "if (AppSettings.getInstance().isDarkMode()) {\n" +
-                        "    g.setColor(0x000000); // Black background\n" +
-                        "}\n" +
-                        "```\n\n" +
-                        "### Workflow Steps\n" +
-                        "1. Organize notes into Notebooks and Sections\n" +
-                        "2. Format content with rich OneNote elements\n" +
-                        "3. Export to SD Card for desktop sync\n\n" +
-                        "---\n\n" +
-                        "### OneNote Note Tags\n" +
-                        "[!] High Priority action item\n" +
-                        "[?] Question regarding sync schedule\n" +
-                        "[*] Starred reference item\n\n" +
-                        "[JSQ Notebook Documentation](https://github.com)");
+                "Welcome to the enhanced **JSQ Notebook** for **BlackBerry OS 5.0** with full markdown and rich formatting!\n\n" +
+                "## Inline Formatting & Spans\n" +
+                "Supports **bold**, *italic*, ***bold & italic***, __underlined__, ~~strikethrough~~, ==highlighted text==, and `inline code`.\n" +
+                "Keyboard shortcuts like <kbd>Alt</kbd> + <kbd>Enter</kbd> or <kbd>Space</kbd> are styled cleanly.\n" +
+                "You can also use inline links such as [GitHub](https://github.com) or [BlackBerry Developer](https://blackberry.com).\n\n" +
+                "<!-- This is an HTML comment: hidden in View Mode, visible in Edit Mode -->\n" +
+                "## Interactive Checklist Tasks\n" +
+                "[ ] Incomplete task (click in View Mode to toggle)\n" +
+                "[x] Completed task\n" +
+                "[-] Cancelled or postponed item\n\n" +
+                "## Tables with In-Cell Checkboxes & Section Headers\n" +
+                "Click table checkboxes directly in View Mode to toggle! Notice that text wraps across multiple lines and row heights adapt dynamically:\n\n" +
+                "| Done | Task Item | Priority | Notes |\n" +
+                "|---|---|---|---|\n" +
+                "| [x] | Multi-line cell word wrapping | High | Cells wrap cleanly without overflowing off screen |\n" +
+                "| [ ] | Interactive table checkboxes | Urgent | Click directly with trackpad to toggle state |\n" +
+                "| [x] | Proportional column sizing | Medium | Checkbox column stays compact |\n" +
+                "|---|---|---|---|\n" +
+                "| Sub | Advanced Table Capabilities | Type | Details |\n" +
+                "| [ ] | Horizontal rule divider (---) | Feature | Automatically makes the next row a header row |\n" +
+                "| [x] | Accurate cursor positioning | System | Switches to edit mode right at the selected row |\n\n" +
+                "## Callout Alert Banners\n" +
+                "* [!NOTE] This is a blue Note callout alert banner. Text automatically wraps to fit the screen width perfectly.\n" +
+                "* [!TIP] Navigate through lines using trackwheel with the subtle grey cursor.\n" +
+                "* [!WARNING] Remember to save edits or use the Back button dialog to discard changes.\n" +
+                "* [!IMPORTANT] In Dark Mode, all callout and table themes automatically invert for optimal contrast.\n\n" +
+                "## Heading Levels Demonstration\n" +
+                "### Heading Level 3 (Section)\n" +
+                "#### Heading Level 4 (Subsection)\n" +
+                "##### Heading Level 5 (Compact Bold)\n" +
+                "###### Heading Level 6 (Sub-detail Italic)\n\n" +
+                "Setext Heading Style H1\n" +
+                "======================\n\n" +
+                "Setext Subheading Style H2\n" +
+                "--------------------------\n\n" +
+                "## Code Block (Word-Wrapped)\n" +
+                "```\n" +
+                "// Table and checkbox handling on BlackBerry OS 5\n" +
+                "TableField tf = new TableField(page, rows, isHeaderFlags, rowLines, cols, callback);\n" +
+                "if (tf.handleTableClick()) {\n" +
+                "    return true; // Checkbox toggled interactively\n" +
+                "}\n" +
+                "```\n\n" +
+                "## Nested Lists & Tags\n" +
+                "• Top-level bullet point\n" +
+                "  • Nested sub-item (2 leading spaces)\n" +
+                "    • Deeply nested sub-item (4 spaces)\n" +
+                "1. First numbered workflow step\n" +
+                "2. Second workflow step\n\n" +
+                "[!] High Priority action item tag\n" +
+                "[?] Question regarding sync schedule\n" +
+                "[*] Starred reference item\n\n" +
+                "---\n\n" +
+                "![JSQ Logo](img_jsq_logo.png)\n" +
+                "[JSQ Notebook Documentation](https://github.com)");
 
         sampleSec.addPage(samplePage);
+
+        long cheatPageId = generateNextId();
+        Page cheatPage = new Page(cheatPageId, secId, "Markdown Cheat Sheet");
+        sampleSec.applyTemplateToPage(cheatPage);
+        cheatPage.setNotes(
+                "# Markdown Syntax Reference\n" +
+                "Quick reference guide for formatted notes in JSQ Notebook.\n\n" +
+                "| Syntax | Output | Category |\n" +
+                "|---|---|---|\n" +
+                "| `**text**` | Bold text | Inline |\n" +
+                "| `*text*` | Italic text | Inline |\n" +
+                "| `***text***` | Bold + Italic | Inline |\n" +
+                "| `__text__` | Underline | Inline |\n" +
+                "| `~~text~~` | Strikethrough | Inline |\n" +
+                "| `==text==` | Highlight | Inline |\n" +
+                "| `` `code` `` | Inline code | Inline |\n" +
+                "| `<kbd>Key</kbd>` | Keyboard key | Inline |\n" +
+                "| `[text](url)` | Web link | Inline |\n" +
+                "|---|---|---|\n" +
+                "| Block Syntax | Description | Example |\n" +
+                "| `| a | b |` | Table row | `| [ ] | Task |` |\n" +
+                "| `* [!NOTE]` | Alert callout | `* [!TIP] Hint` |\n" +
+                "| ```` code ```` | Code block | Monospaced block |\n" +
+                "| `[ ]` / `[x]` | Checklists | Interactive tasks |\n" +
+                "| `#` to `######` | Headings 1-6 | `# Title` |");
+        sampleSec.addPage(cheatPage);
         sampleNb.addSection(sampleSec);
         addNotebook(sampleNb);
         return sampleNb;

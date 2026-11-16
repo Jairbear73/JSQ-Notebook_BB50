@@ -33,6 +33,7 @@ public class FilePickerPopup extends PopupScreen implements ListFieldCallback {
     public static final int MODE_DIRECTORY_SELECT = 1;
     public static final int MODE_JNB_SELECT = 2;
     public static final int MODE_ATTACHMENT_SELECT = 3;
+    public static final int MODE_JNBB_SELECT = 4;
 
     public interface FilePickerListener {
         void onFileSelected(String selectedUrl);
@@ -82,6 +83,8 @@ public class FilePickerPopup extends PopupScreen implements ListFieldCallback {
             titleText = "Select Image to Attach";
         } else if (mode == MODE_JNB_SELECT) {
             titleText = "Select .jnb File to Import";
+        } else if (mode == MODE_JNBB_SELECT) {
+            titleText = "Select .jnbb Backup to Restore";
         } else if (mode == MODE_ATTACHMENT_SELECT) {
             titleText = "Select File to Attach";
         } else {
@@ -109,6 +112,8 @@ public class FilePickerPopup extends PopupScreen implements ListFieldCallback {
             okLabel = "Select Folder";
         } else if (mode == MODE_JNB_SELECT) {
             okLabel = "Import";
+        } else if (mode == MODE_JNBB_SELECT) {
+            okLabel = "Restore";
         } else if (mode == MODE_ATTACHMENT_SELECT) {
             okLabel = "Attach";
         } else {
@@ -183,6 +188,11 @@ public class FilePickerPopup extends PopupScreen implements ListFieldCallback {
                         } else if (mode == MODE_JNB_SELECT) {
                             String lower = entry.toLowerCase();
                             if (lower.endsWith(".jnb")) {
+                                files.addElement(entry);
+                            }
+                        } else if (mode == MODE_JNBB_SELECT) {
+                            String lower = entry.toLowerCase();
+                            if (lower.endsWith(".jnbb")) {
                                 files.addElement(entry);
                             }
                         } else {
@@ -265,6 +275,8 @@ public class FilePickerPopup extends PopupScreen implements ListFieldCallback {
                 Dialog.alert("Please highlight an image file to attach.");
             } else if (mode == MODE_JNB_SELECT) {
                 Dialog.alert("Please highlight a .jnb file to import.");
+            } else if (mode == MODE_JNBB_SELECT) {
+                Dialog.alert("Please highlight a .jnbb file to restore.");
             } else if (mode == MODE_ATTACHMENT_SELECT) {
                 Dialog.alert("Please highlight a file to attach.");
             }
@@ -292,6 +304,16 @@ public class FilePickerPopup extends PopupScreen implements ListFieldCallback {
                     close();
                 } else {
                     Dialog.alert("Please highlight a .jnb file to import.");
+                }
+            } else if (mode == MODE_JNBB_SELECT) {
+                if (entry.rawName.toLowerCase().endsWith(".jnbb")) {
+                    handledSelection = true;
+                    if (listener != null) {
+                        listener.onFileSelected(currentDirectoryUrl + entry.rawName);
+                    }
+                    close();
+                } else {
+                    Dialog.alert("Please highlight a .jnbb file to restore.");
                 }
             } else {
                 Dialog.alert("Please highlight a folder or click 'Select Folder'");

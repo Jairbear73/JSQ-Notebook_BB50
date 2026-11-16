@@ -34,6 +34,25 @@ public final class DateUtils {
     }
 
     /**
+     * Formats timestamp into compact string "YYYYMMDD_HHMMSS" suitable for filenames.
+     */
+    public static String formatCompactDateTime(long timestamp) {
+        Calendar cal = Calendar.getInstance();
+        cal.setTime(new Date(timestamp));
+
+        StringBuffer sb = new StringBuffer(15);
+        append4Digits(sb, cal.get(Calendar.YEAR));
+        append2Digits(sb, cal.get(Calendar.MONTH) + 1);
+        append2Digits(sb, cal.get(Calendar.DAY_OF_MONTH));
+        sb.append('_');
+        append2Digits(sb, cal.get(Calendar.HOUR_OF_DAY));
+        append2Digits(sb, cal.get(Calendar.MINUTE));
+        append2Digits(sb, cal.get(Calendar.SECOND));
+
+        return sb.toString();
+    }
+
+    /**
      * Formats timestamp into date only "YYYY-MM-DD".
      */
     public static String formatDate(long timestamp) {

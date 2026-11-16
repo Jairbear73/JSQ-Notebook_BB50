@@ -628,6 +628,16 @@ public class PageDetailScreen extends MainScreen {
                 }
             }
 
+            if (focused instanceof RichTextParser.TableField) {
+                RichTextParser.TableField tf = (RichTextParser.TableField) focused;
+                if (tf.handleTableClick()) {
+                    return true;
+                }
+                viewFocusedSourceLine = tf.getFocusedSourceLine();
+                switchMode(true);
+                return true;
+            }
+
             if (isInteractiveViewField(focused)) {
                 // Fire the interactive element (button, checkbox, image)
                 return super.navigationClick(status, time);
@@ -650,7 +660,7 @@ public class PageDetailScreen extends MainScreen {
             return sl >= 0 ? sl : 0;
         }
         if (f instanceof RichTextParser.TableField) {
-            int sl = ((RichTextParser.TableField) f).srcLine;
+            int sl = ((RichTextParser.TableField) f).getFocusedSourceLine();
             return sl >= 0 ? sl : 0;
         }
         if (f instanceof RichTextParser.BlockquoteField) {

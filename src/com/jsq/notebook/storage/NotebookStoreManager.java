@@ -99,6 +99,28 @@ public class NotebookStoreManager {
         return database.getNotebooks();
     }
 
+    public synchronized NotebookDatabase getDatabase() {
+        return database;
+    }
+
+    public synchronized void replaceAllNotebooks(Vector newNotebooks, long newNextId) {
+        if (database == null) {
+            database = new NotebookDatabase();
+        }
+        Vector current = database.getNotebooks();
+        current.removeAllElements();
+        if (newNotebooks != null) {
+            int count = newNotebooks.size();
+            for (int i = 0; i < count; i++) {
+                current.addElement(newNotebooks.elementAt(i));
+            }
+        }
+        if (newNextId > database.getNextId()) {
+            database.setNextId(newNextId);
+        }
+        commit();
+    }
+
     public synchronized void addNotebook(Notebook notebook) {
         database.addNotebook(notebook);
         commit();

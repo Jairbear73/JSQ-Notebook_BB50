@@ -46,6 +46,18 @@ public class Page implements Persistable {
         return id;
     }
 
+    public void setId(long id) {
+        this.id = id;
+    }
+
+    public long getSectionId() {
+        return sectionId;
+    }
+
+    public void setSectionId(long sectionId) {
+        this.sectionId = sectionId;
+    }
+
     public String getTitle() {
         return title;
     }
@@ -66,6 +78,10 @@ public class Page implements Persistable {
 
     public long getCreatedTime() {
         return createdTime;
+    }
+
+    public void setCreatedTime(long createdTime) {
+        this.createdTime = createdTime;
     }
 
     public long getModifiedTime() {
