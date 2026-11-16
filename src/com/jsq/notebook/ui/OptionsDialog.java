@@ -3,10 +3,12 @@ package com.jsq.notebook.ui;
 import com.jsq.notebook.model.AppSettings;
 import com.jsq.notebook.model.Notebook;
 import com.jsq.notebook.storage.NotebookStoreManager;
+import com.jsq.notebook.util.ProgressListener;
 import net.rim.device.api.ui.Field;
 import net.rim.device.api.ui.FieldChangeListener;
 import net.rim.device.api.ui.Font;
 import net.rim.device.api.ui.MenuItem;
+import net.rim.device.api.ui.UiApplication;
 import net.rim.device.api.ui.component.ButtonField;
 import net.rim.device.api.ui.component.CheckboxField;
 import net.rim.device.api.ui.component.Dialog;
@@ -71,12 +73,39 @@ public class OptionsDialog extends PopupScreen {
                 ButtonField.CONSUME_CLICK | Field.FIELD_HCENTER);
         loadDemoBtn.setChangeListener(new FieldChangeListener() {
             public void fieldChanged(Field field, int context) {
-                Notebook nb = NotebookStoreManager.getInstance().addDemoNotebook();
-                Dialog.alert("Demo notebook added:\n\"" + nb.getName()
-                        + "\"\n\nContains full demo of all added OneNote features.");
-                if (onSettingsChangedCallback != null) {
-                    onSettingsChangedCallback.run();
-                }
+                final ProgressPopupScreen progress = new ProgressPopupScreen("Importing Demo Notebook");
+                UiApplication.getUiApplication().pushScreen(progress);
+
+                new Thread(new Runnable() {
+                    public void run() {
+                        try {
+                            final Notebook nb = NotebookStoreManager.getInstance()
+                                    .addDemoNotebook(new ProgressListener() {
+                                        public void onProgress(int current, int total, String status) {
+                                            progress.updateProgress(current, total, status);
+                                        }
+                                    });
+
+                            progress.finish();
+                            UiApplication.getUiApplication().invokeLater(new Runnable() {
+                                public void run() {
+                                    Dialog.alert("Demo notebook added:\n\"" + nb.getName()
+                                            + "\"\n\nContains full demo of all added OneNote features.");
+                                    if (onSettingsChangedCallback != null) {
+                                        onSettingsChangedCallback.run();
+                                    }
+                                }
+                            });
+                        } catch (final Exception e) {
+                            progress.finish();
+                            UiApplication.getUiApplication().invokeLater(new Runnable() {
+                                public void run() {
+                                    Dialog.alert("Failed to load demo notebook:\n" + e.getMessage());
+                                }
+                            });
+                        }
+                    }
+                }).start();
             }
         });
         add(loadDemoBtn);

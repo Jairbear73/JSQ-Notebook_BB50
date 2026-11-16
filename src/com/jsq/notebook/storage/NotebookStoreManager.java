@@ -139,7 +139,11 @@ public class NotebookStoreManager {
     }
 
     public synchronized Notebook addDemoNotebook() {
-        Notebook nb = database.createDemoNotebook();
+        return addDemoNotebook(null);
+    }
+
+    public synchronized Notebook addDemoNotebook(com.jsq.notebook.util.ProgressListener listener) {
+        Notebook nb = database.createDemoNotebook(listener);
         commit();
         return nb;
     }

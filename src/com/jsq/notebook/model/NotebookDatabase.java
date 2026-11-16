@@ -73,9 +73,24 @@ public class NotebookDatabase implements Persistable {
      * Creates and adds a fresh OneNote demo notebook to the database.
      */
     public Notebook createDemoNotebook() {
+        return createDemoNotebook(null);
+    }
+
+    /**
+     * Creates and adds a fresh OneNote demo notebook with progress reporting.
+     */
+    public Notebook createDemoNotebook(com.jsq.notebook.util.ProgressListener listener) {
+        if (listener != null) {
+            listener.onProgress(0, 5, "Initializing OneNote Showcase...");
+        }
+
         long nbId = generateNextId();
         Notebook sampleNb = new Notebook(nbId, "OneNote Showcase");
         sampleNb.setDescription("Interactive OneNote demo & features showcase");
+
+        if (listener != null) {
+            listener.onProgress(1, 5, "Creating General Notes section...");
+        }
 
         long secId = generateNextId();
         Section sampleSec = new Section(secId, nbId, "General Notes");
@@ -85,6 +100,10 @@ public class NotebookDatabase implements Persistable {
                 new CustomFieldDefinition("author", "Author", FieldType.TEXT, false, "JSQ User"));
         sampleSec.getFieldDefinitions().addElement(
                 new CustomFieldDefinition("priority", "Priority", FieldType.TEXT, false, "High"));
+
+        if (listener != null) {
+            listener.onProgress(2, 5, "Building: OneNote Features Demo...");
+        }
 
         long pageId = generateNextId();
         Page samplePage = new Page(pageId, secId, "OneNote Features Demo");
@@ -150,6 +169,10 @@ public class NotebookDatabase implements Persistable {
 
         sampleSec.addPage(samplePage);
 
+        if (listener != null) {
+            listener.onProgress(3, 5, "Building: Markdown Cheat Sheet...");
+        }
+
         long cheatPageId = generateNextId();
         Page cheatPage = new Page(cheatPageId, secId, "Markdown Cheat Sheet");
         sampleSec.applyTemplateToPage(cheatPage);
@@ -176,7 +199,17 @@ public class NotebookDatabase implements Persistable {
                 "| `#` to `######` | Headings 1-6 | `# Title` |");
         sampleSec.addPage(cheatPage);
         sampleNb.addSection(sampleSec);
+
+        if (listener != null) {
+            listener.onProgress(4, 5, "Saving to database...");
+        }
+
         addNotebook(sampleNb);
+
+        if (listener != null) {
+            listener.onProgress(5, 5, "Demo notebook ready!");
+        }
+
         return sampleNb;
     }
 

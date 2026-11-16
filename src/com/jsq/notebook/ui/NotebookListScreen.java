@@ -6,6 +6,7 @@ import com.jsq.notebook.export.PageExportManager;
 import com.jsq.notebook.model.Notebook;
 import com.jsq.notebook.storage.NotebookStoreManager;
 import com.jsq.notebook.util.DateUtils;
+import com.jsq.notebook.util.ProgressListener;
 import net.rim.device.api.ui.Field;
 import net.rim.device.api.ui.FieldChangeListener;
 import net.rim.device.api.ui.Font;
@@ -300,17 +301,38 @@ public class NotebookListScreen extends MainScreen implements ListFieldCallback 
         FilePickerPopup picker = new FilePickerPopup(
                 FilePickerPopup.MODE_DIRECTORY_SELECT,
                 new FilePickerPopup.FilePickerListener() {
-                    public void onFileSelected(String selectedUrl) {
-                        // selectedUrl is the chosen directory; export into it
-                        try {
-                            String exportPath = PageExportManager.getInstance()
-                                    .exportNotebook(nb, selectedUrl);
-                            Dialog.alert("Export complete!\n\n" +
-                                    "Notebook: " + nb.getName() + "\n" +
-                                    "Location: " + exportPath);
-                        } catch (Exception e) {
-                            Dialog.alert("Export failed:\n" + e.getMessage());
-                        }
+                    public void onFileSelected(final String selectedUrl) {
+                        final ProgressPopupScreen progress = new ProgressPopupScreen("Exporting Notebook");
+                        UiApplication.getUiApplication().pushScreen(progress);
+
+                        new Thread(new Runnable() {
+                            public void run() {
+                                try {
+                                    final String exportPath = PageExportManager.getInstance()
+                                            .exportNotebook(nb, selectedUrl, new ProgressListener() {
+                                                public void onProgress(int current, int total, String status) {
+                                                    progress.updateProgress(current, total, status);
+                                                }
+                                            });
+
+                                    progress.finish();
+                                    UiApplication.getUiApplication().invokeLater(new Runnable() {
+                                        public void run() {
+                                            Dialog.alert("Export complete!\n\n" +
+                                                    "Notebook: " + nb.getName() + "\n" +
+                                                    "Location: " + exportPath);
+                                        }
+                                    });
+                                } catch (final Exception e) {
+                                    progress.finish();
+                                    UiApplication.getUiApplication().invokeLater(new Runnable() {
+                                        public void run() {
+                                            Dialog.alert("Export failed:\n" + e.getMessage());
+                                        }
+                                    });
+                                }
+                            }
+                        }).start();
                     }
 
                     public void onCancelled() {
@@ -325,19 +347,46 @@ public class NotebookListScreen extends MainScreen implements ListFieldCallback 
         FilePickerPopup picker = new FilePickerPopup(
                 FilePickerPopup.MODE_JNB_SELECT,
                 new FilePickerPopup.FilePickerListener() {
-                    public void onFileSelected(String selectedUrl) {
-                        // selectedUrl is the .jnb file (or notebook folder)
-                        try {
-                            Notebook imported = NotebookImportManager.getInstance()
-                                    .importNotebook(selectedUrl);
-                            refreshList();
-                            Dialog.alert("Import complete!\n\n" +
-                                    "Notebook: " + imported.getName() + "\n" +
-                                    imported.getSections().size() + " section(s), " +
-                                    imported.getTotalPageCount() + " page(s) imported.");
-                        } catch (Exception e) {
-                            Dialog.alert("Import failed:\n" + e.getMessage());
+                    public void onFileSelected(final String selectedUrl) {
+                        if ("demo://jsq_demo_notebook".equals(selectedUrl)) {
+                            promptImportDemoNotebook();
+                            return;
                         }
+
+                        final ProgressPopupScreen progress = new ProgressPopupScreen("Importing Notebook");
+                        UiApplication.getUiApplication().pushScreen(progress);
+
+                        new Thread(new Runnable() {
+                            public void run() {
+                                try {
+                                    final Notebook imported = NotebookImportManager.getInstance()
+                                            .importNotebook(selectedUrl, new ProgressListener() {
+                                                public void onProgress(int current, int total, String status) {
+                                                    progress.updateProgress(current, total, status);
+                                                }
+                                            });
+
+                                    progress.finish();
+                                    UiApplication.getUiApplication().invokeLater(new Runnable() {
+                                        public void run() {
+                                            refreshList();
+                                            Dialog.alert("Import complete!\n\n" +
+                                                    "Notebook: " + imported.getName() + "\n" +
+                                                    imported.getSections().size() + " section(s), " +
+                                                    imported.getTotalPageCount() + " page(s) imported.");
+                                        }
+                                    });
+                                } catch (final Exception e) {
+                                    progress.finish();
+                                    UiApplication.getUiApplication().invokeLater(new Runnable() {
+                                        public void run() {
+                                            refreshList();
+                                            Dialog.alert("Import failed:\n" + e.getMessage());
+                                        }
+                                    });
+                                }
+                            }
+                        }).start();
                     }
 
                     public void onCancelled() {
@@ -345,6 +394,40 @@ public class NotebookListScreen extends MainScreen implements ListFieldCallback 
                     }
                 });
         UiApplication.getUiApplication().pushScreen(picker);
+    }
+
+    private void promptImportDemoNotebook() {
+        final ProgressPopupScreen progress = new ProgressPopupScreen("Importing Demo Notebook");
+        UiApplication.getUiApplication().pushScreen(progress);
+
+        new Thread(new Runnable() {
+            public void run() {
+                try {
+                    final Notebook nb = NotebookImportManager.getInstance()
+                            .importDemoNotebook(new ProgressListener() {
+                                public void onProgress(int current, int total, String status) {
+                                    progress.updateProgress(current, total, status);
+                                }
+                            });
+
+                    progress.finish();
+                    UiApplication.getUiApplication().invokeLater(new Runnable() {
+                        public void run() {
+                            refreshList();
+                            Dialog.alert("Demo notebook imported:\n\"" + nb.getName()
+                                    + "\"\n\nContains full demo of all OneNote features.");
+                        }
+                    });
+                } catch (final Exception e) {
+                    progress.finish();
+                    UiApplication.getUiApplication().invokeLater(new Runnable() {
+                        public void run() {
+                            Dialog.alert("Failed to import demo notebook:\n" + e.getMessage());
+                        }
+                    });
+                }
+            }
+        }).start();
     }
 
     private void promptBackupAllNotebooks() {
@@ -598,6 +681,12 @@ public class NotebookListScreen extends MainScreen implements ListFieldCallback 
         menu.add(new MenuItem("Import", 150, 50) {
             public void run() {
                 promptImportNotebook();
+            }
+        });
+
+        menu.add(new MenuItem("Import Demo Notebook", 152, 52) {
+            public void run() {
+                promptImportDemoNotebook();
             }
         });
 

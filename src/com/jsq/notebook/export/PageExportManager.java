@@ -6,6 +6,7 @@ import com.jsq.notebook.model.Page;
 import com.jsq.notebook.model.Section;
 import com.jsq.notebook.storage.AttachmentStorageManager;
 import com.jsq.notebook.util.DateUtils;
+import com.jsq.notebook.util.ProgressListener;
 import com.jsq.notebook.util.StringUtils;
 
 import javax.microedition.io.Connector;
@@ -77,6 +78,32 @@ public class PageExportManager {
      * @throws IOException if any I/O error occurs
      */
     public String exportNotebook(Notebook notebook, String baseExportUrl) throws IOException {
+        return exportNotebook(notebook, baseExportUrl, null);
+    }
+
+    /**
+     * Exports an entire Notebook into a caller-supplied base directory on the SD Card
+     * with optional progress reporting.
+     *
+     * <p>Produces the structure:
+     * <pre>
+     *   &lt;baseExportUrl&gt;&lt;NotebookName&gt;/
+     *     &lt;NotebookName&gt;.jnb   -- plain-text manifest (name + description)
+     *     index.html            -- HTML overview linking all sections/pages
+     *     &lt;SectionName&gt;/
+     *       &lt;PageTitle&gt;/
+     *         index.html        -- rendered page content
+     *         metadata.json     -- structured JSON for .NET bridge and fast re-import
+     *         &lt;image.jpg&gt;      -- raw image attachments
+     * </pre>
+     *
+     * @param notebook      the Notebook to export (must not be null)
+     * @param baseExportUrl file:// URL of the parent directory to export into
+     * @param listener      optional ProgressListener for real-time progress callbacks
+     * @return the file:// URL of the notebook root folder that was created
+     * @throws IOException if any I/O error occurs
+     */
+    public String exportNotebook(Notebook notebook, String baseExportUrl, ProgressListener listener) throws IOException {
         if (notebook == null) {
             throw new IllegalArgumentException("Notebook cannot be null");
         }
@@ -85,6 +112,21 @@ public class PageExportManager {
         }
         if (!baseExportUrl.endsWith("/")) {
             baseExportUrl = baseExportUrl + "/";
+        }
+
+        Vector sections = notebook.getSections();
+        int secCount = sections != null ? sections.size() : 0;
+        int totalPages = 0;
+        for (int si = 0; si < secCount; si++) {
+            Section section = (Section) sections.elementAt(si);
+            Vector pages = section.getPages();
+            totalPages += pages != null ? pages.size() : 0;
+        }
+
+        int totalUnits = totalPages + 2;
+        int currentUnit = 0;
+        if (listener != null) {
+            listener.onProgress(currentUnit, totalUnits, "Initializing export...");
         }
 
         AttachmentStorageManager storage = AttachmentStorageManager.getInstance();
@@ -98,7 +140,12 @@ public class PageExportManager {
         String jnbContent = buildJnbManifest(notebook);
         writeStringToFile(notebookDir + safeNbName + ".jnb", jnbContent);
 
-        int totalPages = 0;
+        currentUnit++;
+        if (listener != null) {
+            listener.onProgress(currentUnit, totalUnits, "Writing manifest...");
+        }
+
+        int pageIndex = 0;
         int totalSections = 0;
 
         // 2. Build notebook-level HTML index
@@ -121,8 +168,6 @@ public class PageExportManager {
         }
 
         // 3. Iterate sections
-        Vector sections = notebook.getSections();
-        int secCount = sections != null ? sections.size() : 0;
         for (int si = 0; si < secCount; si++) {
             Section section = (Section) sections.elementAt(si);
             totalSections++;
@@ -137,7 +182,15 @@ public class PageExportManager {
             int pageCount = pages != null ? pages.size() : 0;
             for (int pi = 0; pi < pageCount; pi++) {
                 Page page = (Page) pages.elementAt(pi);
-                totalPages++;
+                pageIndex++;
+
+                if (listener != null) {
+                    String title = page.getTitle();
+                    if (title.length() > 22) {
+                        title = title.substring(0, 19) + "...";
+                    }
+                    listener.onProgress(currentUnit + pageIndex, totalUnits, "Exporting: " + title);
+                }
 
                 exportPageTo(notebook, section, page, sectionDir);
 
@@ -154,10 +207,14 @@ public class PageExportManager {
         // Footer
         nbIndex.append("<hr />\n<p style=\"font-size:12px;color:#7f8c8d\">");
         nbIndex.append(totalSections).append(" section").append(totalSections == 1 ? "" : "s").append(", ");
-        nbIndex.append(totalPages).append(" page").append(totalPages == 1 ? "" : "s").append(" exported.");
+        nbIndex.append(pageIndex).append(" page").append(pageIndex == 1 ? "" : "s").append(" exported.");
         nbIndex.append("</p>\n</div>\n</body>\n</html>\n");
 
-        writeStringToFile(notebookDir + "index.html", nbIndex.toString());
+        writeStringBufferToFile(notebookDir + "index.html", nbIndex);
+
+        if (listener != null) {
+            listener.onProgress(totalUnits, totalUnits, "Export complete!");
+        }
 
         return notebookDir;
     }
@@ -234,13 +291,13 @@ public class PageExportManager {
             }
         }
 
-        // 3. Write index.html using StringBuffer
-        String htmlContent = buildHtmlContent(notebook, section, page, imageNames);
-        writeStringToFile(pageExportFolder + "index.html", htmlContent);
+        // 3. Write index.html using StringBuffer directly (avoids heap duplicate String)
+        StringBuffer htmlContent = buildHtmlContent(notebook, section, page, imageNames);
+        writeStringBufferToFile(pageExportFolder + "index.html", htmlContent);
 
-        // 4. Write metadata.json for .NET bridge consumption
-        String jsonContent = buildMetadataJson(notebook, section, page, imageNames);
-        writeStringToFile(pageExportFolder + "metadata.json", jsonContent);
+        // 4. Write metadata.json for .NET bridge and fast re-import consumption
+        StringBuffer jsonContent = buildMetadataJson(notebook, section, page, imageNames);
+        writeStringBufferToFile(pageExportFolder + "metadata.json", jsonContent);
 
         return pageExportFolder;
     }
@@ -281,7 +338,7 @@ public class PageExportManager {
      * Constructs rich HTML document with metadata table and rendered markdown notes.
      * Uses StringBuffer to minimize heap churn.
      */
-    private String buildHtmlContent(Notebook notebook, Section section, Page page, Vector images) {
+    private StringBuffer buildHtmlContent(Notebook notebook, Section section, Page page, Vector images) {
         StringBuffer sb = new StringBuffer(2048);
 
         sb.append("<!DOCTYPE html>\n<html>\n<head>\n");
@@ -362,7 +419,7 @@ public class PageExportManager {
         sb.append("\n</div>\n");
 
         sb.append("</div>\n</body>\n</html>\n");
-        return sb.toString();
+        return sb;
     }
 
     /**
@@ -738,9 +795,9 @@ public class PageExportManager {
     }
 
     /**
-     * Generates structured JSON metadata for the .NET bridge.
+     * Generates structured JSON metadata for the .NET bridge and fast re-import.
      */
-    private String buildMetadataJson(Notebook notebook, Section section, Page page, Vector images) {
+    private StringBuffer buildMetadataJson(Notebook notebook, Section section, Page page, Vector images) {
         StringBuffer sb = new StringBuffer(1024);
         sb.append("{\n");
         sb.append("  \"version\": 1,\n");
@@ -754,6 +811,7 @@ public class PageExportManager {
         sb.append("  \"createdIso\": \"").append(DateUtils.formatIso8601(page.getCreatedTime())).append("\",\n");
         sb.append("  \"modifiedTime\": ").append(page.getModifiedTime()).append(",\n");
         sb.append("  \"modifiedIso\": \"").append(DateUtils.formatIso8601(page.getModifiedTime())).append("\",\n");
+        sb.append("  \"notes\": \"").append(jsonEscape(page.getNotes())).append("\",\n");
 
         // Custom Fields
         sb.append("  \"customFields\": [\n");
@@ -786,7 +844,7 @@ public class PageExportManager {
         sb.append("  ]\n");
         sb.append("}\n");
 
-        return sb.toString();
+        return sb;
     }
 
     private String jsonEscape(String text) {
@@ -835,6 +893,47 @@ public class PageExportManager {
             out = fc.openOutputStream();
             writer = new OutputStreamWriter(out, "UTF-8");
             writer.write(content);
+            writer.flush();
+        } finally {
+            if (writer != null) {
+                try { writer.close(); } catch (Exception e) {}
+            }
+            if (out != null) {
+                try { out.close(); } catch (Exception e) {}
+            }
+            if (fc != null) {
+                try { fc.close(); } catch (Exception e) {}
+            }
+        }
+    }
+
+    /**
+     * Writes UTF-8 StringBuffer content in chunks to minimize memory allocations.
+     */
+    private void writeStringBufferToFile(String fileUrl, StringBuffer sb) throws IOException {
+        FileConnection fc = null;
+        OutputStream out = null;
+        OutputStreamWriter writer = null;
+
+        try {
+            fc = (FileConnection) Connector.open(fileUrl, Connector.READ_WRITE);
+            if (fc.exists()) {
+                fc.delete();
+            }
+            fc.create();
+
+            out = fc.openOutputStream();
+            writer = new OutputStreamWriter(out, "UTF-8");
+
+            int len = sb.length();
+            char[] cbuf = new char[2048];
+            int offset = 0;
+            while (offset < len) {
+                int count = Math.min(2048, len - offset);
+                sb.getChars(offset, offset + count, cbuf, 0);
+                writer.write(cbuf, 0, count);
+                offset += count;
+            }
             writer.flush();
         } finally {
             if (writer != null) {

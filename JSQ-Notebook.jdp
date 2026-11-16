@@ -48,6 +48,7 @@ src\com\jsq\notebook\ui\RichTextParser.java
 src\com\jsq\notebook\ui\SectionListScreen.java
 src\com\jsq\notebook\ui\SectionTemplateScreen.java
 src\com\jsq\notebook\util\DateUtils.java
+src\com\jsq\notebook\util\ProgressListener.java
 src\com\jsq\notebook\util\StringUtils.java
 ]
 HaveAlxImports=0

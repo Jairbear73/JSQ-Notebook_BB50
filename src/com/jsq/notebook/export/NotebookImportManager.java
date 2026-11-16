@@ -1,10 +1,12 @@
 package com.jsq.notebook.export;
 
+import com.jsq.notebook.model.CustomField;
 import com.jsq.notebook.model.Notebook;
 import com.jsq.notebook.model.Page;
 import com.jsq.notebook.model.Section;
 import com.jsq.notebook.storage.AttachmentStorageManager;
 import com.jsq.notebook.storage.NotebookStoreManager;
+import com.jsq.notebook.util.ProgressListener;
 
 import javax.microedition.io.Connector;
 import javax.microedition.io.file.FileConnection;
@@ -55,7 +57,22 @@ public class NotebookImportManager {
      * @return the newly created and persisted Notebook
      * @throws IOException if any I/O error occurs or the folder is not a valid .jnb export
      */
+    /**
+     * Imports a Notebook from a .jnb export folder, saves it to device NVRAM, and returns it.
+     */
     public Notebook importNotebook(String notebookDirUrl) throws IOException {
+        return importNotebook(notebookDirUrl, null);
+    }
+
+    /**
+     * Imports a Notebook from a .jnb export folder with optional progress reporting.
+     *
+     * @param notebookDirUrl file:// URL of the notebook root folder (must end with '/')
+     * @param listener optional ProgressListener for real-time progress callbacks
+     * @return the newly created and persisted Notebook
+     * @throws IOException if any I/O error occurs or the folder is not a valid .jnb export
+     */
+    public Notebook importNotebook(String notebookDirUrl, ProgressListener listener) throws IOException {
         if (notebookDirUrl == null || notebookDirUrl.length() == 0) {
             throw new IllegalArgumentException("notebookDirUrl cannot be empty");
         }
@@ -88,25 +105,36 @@ public class NotebookImportManager {
             notebookDesc = "";
         }
 
-        // --- 2. Create Notebook shell ---
+        // --- 2. Calculate work units for progress bar ---
+        Vector sectionDirs = listSubdirectories(notebookDirUrl);
+        int secCount = sectionDirs.size();
+        int totalPages = 0;
+        for (int si = 0; si < secCount; si++) {
+            Vector pageDirs = listSubdirectories((String) sectionDirs.elementAt(si));
+            totalPages += pageDirs.size();
+        }
+
+        int totalUnits = totalPages + 2;
+        int currentUnit = 0;
+        if (listener != null) {
+            listener.onProgress(currentUnit, totalUnits, "Reading manifest...");
+        }
+
+        // --- 3. Create Notebook shell ---
         NotebookStoreManager store = NotebookStoreManager.getInstance();
         long nbId = store.nextId();
         Notebook notebook = new Notebook(nbId, notebookName);
         notebook.setDescription(notebookDesc);
 
-        // --- 3. Discover section subdirectories ---
-        Vector sectionDirs = listSubdirectories(notebookDirUrl);
-        int secCount = sectionDirs.size();
+        // --- 4. Discover and import sections and pages ---
         for (int si = 0; si < secCount; si++) {
             String sectionDir = (String) sectionDirs.elementAt(si);
             String sectionName = lastPathComponent(sectionDir);
 
             long secId = store.nextId();
             Section section = new Section(secId, nbId, sectionName);
-            // Clear default template so we don't add unwanted fields
             section.getFieldDefinitions().removeAllElements();
 
-            // --- 4. Discover page subdirectories within section ---
             Vector pageDirs = listSubdirectories(sectionDir);
             int pageCount = pageDirs.size();
             for (int pi = 0; pi < pageCount; pi++) {
@@ -114,23 +142,40 @@ public class NotebookImportManager {
                 String pageTitle = lastPathComponent(pageDir);
                 String notes = "";
 
-                // Try to read notes from metadata.json
+                if (listener != null) {
+                    listener.onProgress(++currentUnit, totalUnits, "Importing: " + pageTitle);
+                }
+
+                // Copy any attachments present in page folder to global Attachments dir
+                copyAttachmentsFromPageDir(pageDir);
+
+                // Try to read metadata.json
                 String metaUrl = pageDir + "metadata.json";
+                long pageId = store.nextId();
+                Page page = new Page(pageId, secId, pageTitle);
+
                 if (fileExists(metaUrl)) {
                     String json = readFileAsString(metaUrl);
                     String parsedTitle = parseJsonField(json, "title");
-                    String parsedNotes = null;
-
-                    // notes are not directly in metadata.json — they are in index.html
-                    // Use title from metadata if available
                     if (parsedTitle != null && parsedTitle.length() > 0) {
                         pageTitle = parsedTitle;
+                        page.setTitle(pageTitle);
                     }
-                    // notes field was not exported to metadata.json; read from index.html
-                    parsedNotes = extractNotesFromHtml(pageDir + "index.html");
-                    if (parsedNotes != null) {
+
+                    // Fast-path: read raw markdown notes directly from metadata.json if present
+                    String parsedNotes = parseJsonField(json, "notes");
+                    if (parsedNotes != null && parsedNotes.length() > 0) {
                         notes = parsedNotes;
+                    } else {
+                        // Fallback: extract notes from index.html
+                        parsedNotes = extractNotesFromHtml(pageDir + "index.html");
+                        if (parsedNotes != null) {
+                            notes = parsedNotes;
+                        }
                     }
+
+                    // Parse custom fields from metadata.json
+                    parseCustomFieldsFromJson(json, page);
                 } else {
                     // Fallback: try reading notes body from index.html
                     String htmlUrl = pageDir + "index.html";
@@ -142,8 +187,6 @@ public class NotebookImportManager {
                     }
                 }
 
-                long pageId = store.nextId();
-                Page page = new Page(pageId, secId, pageTitle);
                 page.setNotes(notes);
                 section.addPage(page);
             }
@@ -152,9 +195,24 @@ public class NotebookImportManager {
         }
 
         // --- 5. Persist notebook to NVRAM ---
+        if (listener != null) {
+            listener.onProgress(totalUnits - 1, totalUnits, "Saving to database...");
+        }
+
         store.addNotebook(notebook);
 
+        if (listener != null) {
+            listener.onProgress(totalUnits, totalUnits, "Import complete!");
+        }
+
         return notebook;
+    }
+
+    /**
+     * Imports the OneNote demo notebook with progress reporting.
+     */
+    public Notebook importDemoNotebook(ProgressListener listener) {
+        return NotebookStoreManager.getInstance().addDemoNotebook(listener);
     }
 
     // ==========================================
@@ -342,6 +400,85 @@ public class NotebookImportManager {
             }
         }
         return sb.toString();
+    }
+
+    /**
+     * Copies any image or binary media files located in the page export folder
+     * back into the application's global Attachments folder on the SD Card.
+     */
+    private void copyAttachmentsFromPageDir(String pageDir) {
+        FileConnection fc = null;
+        try {
+            fc = (FileConnection) Connector.open(pageDir, Connector.READ);
+            if (fc.exists() && fc.isDirectory()) {
+                Enumeration entries = fc.list("*", true);
+                AttachmentStorageManager storage = AttachmentStorageManager.getInstance();
+                String attDir = storage.getAttachmentDirectoryUrl();
+                storage.ensureDirectoryExists(attDir);
+
+                while (entries.hasMoreElements()) {
+                    String entry = (String) entries.nextElement();
+                    if (!entry.endsWith("/")) {
+                        String lower = entry.toLowerCase();
+                        if (AttachmentStorageManager.isImageFile(lower) || lower.endsWith(".mp3") ||
+                                lower.endsWith(".amr") || lower.endsWith(".wav") ||
+                                lower.endsWith(".pdf") || lower.endsWith(".doc")) {
+                            String srcUrl = pageDir + entry;
+                            String destUrl = attDir + entry;
+                            try {
+                                if (!fileExists(destUrl)) {
+                                    storage.copyFile(srcUrl, destUrl);
+                                }
+                            } catch (Exception ignored) {}
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        } finally {
+            closeQuietly(fc);
+        }
+    }
+
+    /**
+     * Parses custom fields array from metadata.json and adds them to the page.
+     */
+    private void parseCustomFieldsFromJson(String json, Page page) {
+        if (json == null || page == null) return;
+        int cfStart = json.indexOf("\"customFields\"");
+        if (cfStart < 0) return;
+        int arrayStart = json.indexOf('[', cfStart);
+        if (arrayStart < 0) return;
+        int arrayEnd = json.indexOf(']', arrayStart);
+        if (arrayEnd < 0) return;
+
+        String cfArray = json.substring(arrayStart + 1, arrayEnd);
+        int objStart = 0;
+        while ((objStart = cfArray.indexOf('{', objStart)) >= 0) {
+            int objEnd = cfArray.indexOf('}', objStart);
+            if (objEnd < 0) break;
+            String obj = cfArray.substring(objStart + 1, objEnd);
+            String key = parseJsonField(obj, "key");
+            String label = parseJsonField(obj, "label");
+            String val = parseJsonField(obj, "value");
+            int type = 0;
+            int typeIdx = obj.indexOf("\"type\"");
+            if (typeIdx >= 0) {
+                int colon = obj.indexOf(':', typeIdx);
+                if (colon >= 0) {
+                    int comma = obj.indexOf(',', colon);
+                    String typeStr = (comma >= 0 ? obj.substring(colon + 1, comma) : obj.substring(colon + 1)).trim();
+                    try {
+                        type = Integer.parseInt(typeStr);
+                    } catch (Exception ignored) {}
+                }
+            }
+            if (key != null && key.length() > 0) {
+                CustomField cf = new CustomField(key, label != null ? label : key, type, val != null ? val : "", false);
+                page.addCustomField(cf);
+            }
+            objStart = objEnd + 1;
+        }
     }
 
     /**

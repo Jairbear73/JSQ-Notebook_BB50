@@ -34,8 +34,7 @@ public class NotebookBackupManager {
 
     private static NotebookBackupManager instance;
 
-    public interface ProgressListener {
-        void onProgress(int current, int total, String status);
+    public interface ProgressListener extends com.jsq.notebook.util.ProgressListener {
     }
 
     public static class BackupResult {

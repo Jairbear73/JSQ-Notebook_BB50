@@ -366,6 +366,16 @@ public class FilePickerPopup extends PopupScreen implements ListFieldCallback {
                     close();
                 }
             });
+        } else if (mode == MODE_JNB_SELECT) {
+            menu.add(new MenuItem("Import Demo Notebook", 105, 12) {
+                public void run() {
+                    handledSelection = true;
+                    close();
+                    if (listener != null) {
+                        listener.onFileSelected("demo://jsq_demo_notebook");
+                    }
+                }
+            });
         }
 
         menu.add(new MenuItem("Open / Select", 110, 15) {
