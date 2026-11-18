@@ -39,20 +39,12 @@ public class ProgressBarField extends Field {
         invalidate();
     }
 
-    public synchronized int getValue() {
-        return value;
-    }
-
     public synchronized void setMaxValue(int maxValue) {
         this.maxValue = maxValue > 0 ? maxValue : 100;
         if (value > this.maxValue) {
             value = this.maxValue;
         }
         invalidate();
-    }
-
-    public synchronized int getMaxValue() {
-        return maxValue;
     }
 
     public int getPreferredHeight() {

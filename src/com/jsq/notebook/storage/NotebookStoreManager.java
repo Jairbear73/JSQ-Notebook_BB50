@@ -99,10 +99,6 @@ public class NotebookStoreManager {
         return database.getNotebooks();
     }
 
-    public synchronized NotebookDatabase getDatabase() {
-        return database;
-    }
-
     public synchronized void replaceAllNotebooks(Vector newNotebooks, long newNextId) {
         if (database == null) {
             database = new NotebookDatabase();
@@ -138,18 +134,10 @@ public class NotebookStoreManager {
         return database.generateNextId();
     }
 
-    public synchronized Notebook addDemoNotebook() {
-        return addDemoNotebook(null);
-    }
-
     public synchronized Notebook addDemoNotebook(com.jsq.notebook.util.ProgressListener listener) {
         Notebook nb = database.createDemoNotebook(listener);
         commit();
         return nb;
-    }
-
-    public synchronized Notebook addDebugNotebook() {
-        return addDebugNotebook(null);
     }
 
     public synchronized Notebook addDebugNotebook(com.jsq.notebook.util.ProgressListener listener) {

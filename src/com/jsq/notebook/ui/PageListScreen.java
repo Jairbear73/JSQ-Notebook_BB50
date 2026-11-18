@@ -250,7 +250,7 @@ public class PageListScreen extends MainScreen implements ListFieldCallback {
                 Dialog.alert("Export failed: " + e.getMessage());
             }
         } else {
-            FilePickerPopup picker = new FilePickerPopup(FilePickerPopup.MODE_DIRECTORY_SELECT,
+            FilePickerPopup.open(FilePickerPopup.MODE_DIRECTORY_SELECT,
                     new FilePickerPopup.FilePickerListener() {
                         public void onFileSelected(String selectedUrl) {
                             try {
@@ -265,7 +265,6 @@ public class PageListScreen extends MainScreen implements ListFieldCallback {
                         public void onCancelled() {
                         }
                     });
-            UiApplication.getUiApplication().pushScreen(picker);
         }
     }
 

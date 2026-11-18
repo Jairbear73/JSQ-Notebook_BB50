@@ -217,59 +217,54 @@ public class NotebookDatabase implements Persistable {
     // Debug / Benchmark Notebook
     // -------------------------------------------------------------------------
 
-    /** Creates and adds the debug notebook (no progress). */
-    public Notebook createDebugNotebook() {
-        return createDebugNotebook(null);
-    }
-
     /**
      * Creates a two-section debug notebook:
      *   Section 1 "Test" – exhaustive feature coverage
      *   Section 2 "Benchmark" – heavy-load stress pages
      */
     public Notebook createDebugNotebook(com.jsq.notebook.util.ProgressListener listener) {
-        final int TOTAL = 18; // progress steps
+        int totalSteps = 18; // progress steps
         int step = 0;
 
-        if (listener != null) listener.onProgress(step++, TOTAL, "Creating Debug Notebook...");
+        if (listener != null) listener.onProgress(step++, totalSteps, "Creating Debug Notebook...");
 
         long nbId = generateNextId();
         Notebook nb = new Notebook(nbId, "DEBUG Notebook");
         nb.setDescription("Feature tests and stress benchmarks for JSQ Notebook");
 
         // ---- Section 1: Test ------------------------------------------------
-        if (listener != null) listener.onProgress(step++, TOTAL, "Building Test section...");
+        if (listener != null) listener.onProgress(step++, totalSteps, "Building Test section...");
         long sec1Id = generateNextId();
         Section testSec = new Section(sec1Id, nbId, "Test");
         testSec.setDescription("Exhaustive feature coverage tests");
 
-        testSec.addPage(buildTestPage_InlineFormatting(sec1Id, listener, step++, TOTAL));
-        testSec.addPage(buildTestPage_BlockElements(sec1Id, listener, step++, TOTAL));
-        testSec.addPage(buildTestPage_Tables(sec1Id, listener, step++, TOTAL));
-        testSec.addPage(buildTestPage_Checklists(sec1Id, listener, step++, TOTAL));
-        testSec.addPage(buildTestPage_NestedLists(sec1Id, listener, step++, TOTAL));
-        testSec.addPage(buildTestPage_FormattingCombinations(sec1Id, listener, step++, TOTAL));
-        testSec.addPage(buildTestPage_EdgeCases(sec1Id, listener, step++, TOTAL));
+        testSec.addPage(buildTestPage_InlineFormatting(sec1Id, listener, step++, totalSteps));
+        testSec.addPage(buildTestPage_BlockElements(sec1Id, listener, step++, totalSteps));
+        testSec.addPage(buildTestPage_Tables(sec1Id, listener, step++, totalSteps));
+        testSec.addPage(buildTestPage_Checklists(sec1Id, listener, step++, totalSteps));
+        testSec.addPage(buildTestPage_NestedLists(sec1Id, listener, step++, totalSteps));
+        testSec.addPage(buildTestPage_FormattingCombinations(sec1Id, listener, step++, totalSteps));
+        testSec.addPage(buildTestPage_EdgeCases(sec1Id, listener, step++, totalSteps));
         nb.addSection(testSec);
 
         // ---- Section 2: Benchmark -------------------------------------------
-        if (listener != null) listener.onProgress(step++, TOTAL, "Building Benchmark section...");
+        if (listener != null) listener.onProgress(step++, totalSteps, "Building Benchmark section...");
         long sec2Id = generateNextId();
         Section benchSec = new Section(sec2Id, nbId, "Benchmark");
         benchSec.setDescription("Heavy-load stress tests pushing rendering limits");
 
-        benchSec.addPage(buildBenchPage_FormatEveryLetter(sec2Id, listener, step++, TOTAL));
-        benchSec.addPage(buildBenchPage_MaxChecklists(sec2Id, listener, step++, TOTAL));
-        benchSec.addPage(buildBenchPage_MaxTable(sec2Id, listener, step++, TOTAL));
-        benchSec.addPage(buildBenchPage_MaxNestedLists(sec2Id, listener, step++, TOTAL));
-        benchSec.addPage(buildBenchPage_MaxMixedContent(sec2Id, listener, step++, TOTAL));
-        benchSec.addPage(buildBenchPage_MaxCallouts(sec2Id, listener, step++, TOTAL));
-        benchSec.addPage(buildBenchPage_OverLimit(sec2Id, listener, step++, TOTAL));
+        benchSec.addPage(buildBenchPage_FormatEveryLetter(sec2Id, listener, step++, totalSteps));
+        benchSec.addPage(buildBenchPage_MaxChecklists(sec2Id, listener, step++, totalSteps));
+        benchSec.addPage(buildBenchPage_MaxTable(sec2Id, listener, step++, totalSteps));
+        benchSec.addPage(buildBenchPage_MaxNestedLists(sec2Id, listener, step++, totalSteps));
+        benchSec.addPage(buildBenchPage_MaxMixedContent(sec2Id, listener, step++, totalSteps));
+        benchSec.addPage(buildBenchPage_MaxCallouts(sec2Id, listener, step++, totalSteps));
+        benchSec.addPage(buildBenchPage_OverLimit(sec2Id, listener, step++, totalSteps));
         nb.addSection(benchSec);
 
-        if (listener != null) listener.onProgress(step++, TOTAL, "Saving Debug Notebook...");
+        if (listener != null) listener.onProgress(step++, totalSteps, "Saving Debug Notebook...");
         addNotebook(nb);
-        if (listener != null) listener.onProgress(TOTAL, TOTAL, "Debug notebook ready!");
+        if (listener != null) listener.onProgress(totalSteps, totalSteps, "Debug notebook ready!");
         return nb;
     }
 
@@ -713,7 +708,6 @@ public class NotebookDatabase implements Persistable {
         if (l != null) l.onProgress(step, total, "Bench: Max Table...");
         long id = generateNextId();
         Page p = new Page(id, secId, "BENCH: Max Table");
-        int cols = 5;
         StringBuffer sb = new StringBuffer(64000);
         sb.append("# Max Table Benchmark\n");
         sb.append("Wide table with max rows testing table layout performance.\n\n");

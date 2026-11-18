@@ -75,10 +75,6 @@ public class ProgressPopupScreen extends PopupScreen {
         });
     }
 
-    public boolean isRunning() {
-        return isRunning;
-    }
-
     /**
      * Prevent accidental dismissal via ESC key while an I/O operation is in progress.
      */

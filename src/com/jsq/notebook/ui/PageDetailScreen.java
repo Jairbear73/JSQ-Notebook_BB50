@@ -532,7 +532,7 @@ public class PageDetailScreen extends MainScreen {
             return;
         }
 
-        FilePickerPopup popup = new FilePickerPopup(FilePickerPopup.MODE_ATTACHMENT_SELECT,
+        FilePickerPopup.open(FilePickerPopup.MODE_ATTACHMENT_SELECT,
                 new FilePickerPopup.FilePickerListener() {
                     public void onFileSelected(final String selectedUrl) {
                         int lastSlash = selectedUrl.lastIndexOf('/');
@@ -571,8 +571,6 @@ public class PageDetailScreen extends MainScreen {
                     public void onCancelled() {
                     }
                 });
-
-        UiApplication.getUiApplication().pushScreen(popup);
     }
 
     private void insertPlaceholder(String tag) {
@@ -760,7 +758,7 @@ public class PageDetailScreen extends MainScreen {
                 Dialog.alert("Export error: " + e.getMessage());
             }
         } else {
-            FilePickerPopup picker = new FilePickerPopup(FilePickerPopup.MODE_DIRECTORY_SELECT,
+            FilePickerPopup.open(FilePickerPopup.MODE_DIRECTORY_SELECT,
                     new FilePickerPopup.FilePickerListener() {
                         public void onFileSelected(String selectedUrl) {
                             try {
@@ -775,7 +773,6 @@ public class PageDetailScreen extends MainScreen {
                         public void onCancelled() {
                         }
                     });
-            UiApplication.getUiApplication().pushScreen(picker);
         }
     }
 

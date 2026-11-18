@@ -2,10 +2,10 @@ Manifest-Version: 1.0
 RIM-COD-Module-Name: JSQ$2dNotebook$2ejdp
 RIM-COD-Module-Dependencies: net_rim_cldc
 MIDlet-Jar-Size: 0
-RIM-COD-Creation-Time: 1794802994
+RIM-COD-Creation-Time: 1794976118
 MIDlet-Jar-URL: unknown
 RIM-COD-URL: JSQ$2dNotebook$2ejdp.cod
-RIM-COD-SHA1: af dc ac 37 80 25 99 db 18 2f 9c 5a 0c 7d 5b 57 21 8a 1d 5c
+RIM-COD-SHA1: 80 48 0e 9d 72 ce 64 5b 7d 9b be 01 8f 2d 48 a5 63 ae 4a a8
 RIM-COD-Size: 2860
 MicroEdition-Configuration: CLDC-1.1
 MIDlet-Version: 0.0

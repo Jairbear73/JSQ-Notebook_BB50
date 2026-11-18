@@ -345,8 +345,8 @@ public class NotebookBackupManager {
                 throw new IOException("Unsupported backup format version: " + version);
             }
 
-            long backupTimestamp = dis.readLong();
-            String manifest = readSafeString(dis);
+            dis.readLong(); // backupTimestamp
+            readSafeString(dis); // manifest
             long savedNextId = dis.readLong();
 
             // 2. Read Notebooks

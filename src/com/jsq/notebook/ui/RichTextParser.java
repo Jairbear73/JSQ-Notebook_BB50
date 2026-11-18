@@ -1069,10 +1069,6 @@ public class RichTextParser {
         return s;
     }
 
-    private static String stripStarPrefix(String str) {
-        return stripCalloutPrefix(str);
-    }
-
     private static boolean isAlertStart(String text) {
         if (text == null) return false;
         String s = text.trim();

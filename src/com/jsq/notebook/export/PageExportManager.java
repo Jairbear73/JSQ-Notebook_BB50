@@ -77,10 +77,6 @@ public class PageExportManager {
      * @return the file:// URL of the notebook root folder that was created
      * @throws IOException if any I/O error occurs
      */
-    public String exportNotebook(Notebook notebook, String baseExportUrl) throws IOException {
-        return exportNotebook(notebook, baseExportUrl, null);
-    }
-
     /**
      * Exports an entire Notebook into a caller-supplied base directory on the SD Card
      * with optional progress reporting.

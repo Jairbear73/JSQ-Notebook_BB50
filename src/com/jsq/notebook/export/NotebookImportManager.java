@@ -58,13 +58,6 @@ public class NotebookImportManager {
      * @throws IOException if any I/O error occurs or the folder is not a valid .jnb export
      */
     /**
-     * Imports a Notebook from a .jnb export folder, saves it to device NVRAM, and returns it.
-     */
-    public Notebook importNotebook(String notebookDirUrl) throws IOException {
-        return importNotebook(notebookDirUrl, null);
-    }
-
-    /**
      * Imports a Notebook from a .jnb export folder with optional progress reporting.
      *
      * @param notebookDirUrl file:// URL of the notebook root folder (must end with '/')

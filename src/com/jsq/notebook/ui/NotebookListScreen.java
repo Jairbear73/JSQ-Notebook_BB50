@@ -298,7 +298,7 @@ public class NotebookListScreen extends MainScreen implements ListFieldCallback 
         }
 
         // Open file picker so user can choose the destination directory
-        FilePickerPopup picker = new FilePickerPopup(
+        FilePickerPopup.open(
                 FilePickerPopup.MODE_DIRECTORY_SELECT,
                 new FilePickerPopup.FilePickerListener() {
                     public void onFileSelected(final String selectedUrl) {
@@ -339,12 +339,11 @@ public class NotebookListScreen extends MainScreen implements ListFieldCallback 
                         // User cancelled — do nothing
                     }
                 });
-        UiApplication.getUiApplication().pushScreen(picker);
     }
 
     private void promptImportNotebook() {
         // Open file picker so user can navigate to and click a .jnb file
-        FilePickerPopup picker = new FilePickerPopup(
+        FilePickerPopup.open(
                 FilePickerPopup.MODE_JNB_SELECT,
                 new FilePickerPopup.FilePickerListener() {
                     public void onFileSelected(final String selectedUrl) {
@@ -393,7 +392,6 @@ public class NotebookListScreen extends MainScreen implements ListFieldCallback 
                         // User cancelled — do nothing
                     }
                 });
-        UiApplication.getUiApplication().pushScreen(picker);
     }
 
     private void promptImportDemoNotebook() {
@@ -436,7 +434,7 @@ public class NotebookListScreen extends MainScreen implements ListFieldCallback 
             return;
         }
 
-        FilePickerPopup picker = new FilePickerPopup(
+        FilePickerPopup.open(
                 FilePickerPopup.MODE_DIRECTORY_SELECT,
                 new FilePickerPopup.FilePickerListener() {
                     public void onFileSelected(final String selectedDirUrl) {
@@ -446,7 +444,6 @@ public class NotebookListScreen extends MainScreen implements ListFieldCallback 
                     public void onCancelled() {
                     }
                 });
-        UiApplication.getUiApplication().pushScreen(picker);
     }
 
     private void confirmBackupFileName(final String baseDirUrl) {
@@ -562,7 +559,7 @@ public class NotebookListScreen extends MainScreen implements ListFieldCallback 
     }
 
     private void promptRestoreNotebooks() {
-        FilePickerPopup picker = new FilePickerPopup(
+        FilePickerPopup.open(
                 FilePickerPopup.MODE_JNBB_SELECT,
                 new FilePickerPopup.FilePickerListener() {
                     public void onFileSelected(final String selectedFileUrl) {
@@ -572,7 +569,6 @@ public class NotebookListScreen extends MainScreen implements ListFieldCallback 
                     public void onCancelled() {
                     }
                 });
-        UiApplication.getUiApplication().pushScreen(picker);
     }
 
     private void confirmRestoreOptions(final String fileUrl) {
