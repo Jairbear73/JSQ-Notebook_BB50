@@ -22,7 +22,7 @@ import net.rim.device.api.ui.container.HorizontalFieldManager;
 import net.rim.device.api.ui.container.MainScreen;
 import net.rim.device.api.ui.container.PopupScreen;
 import net.rim.device.api.ui.container.VerticalFieldManager;
-import net.rim.device.api.ui.picker.FilePicker;
+//import net.rim.device.api.ui.picker.FilePicker;
 
 import javax.microedition.io.Connector;
 import javax.microedition.io.file.FileConnection;
@@ -34,9 +34,11 @@ import java.util.Vector;
  * Modern, full-screen file and directory chooser for BlackBerry OS 5.0.
  *
  * Provides:
- * 1. Automatic delegation to native BlackBerry OS 5.0 FilePicker for file selections.
- * 2. Dedicated, rock-solid Directory Chooser where selecting destination folders via
- *    the OK button, menu, top action bar, or trackwheel click works 100% reliably.
+ * 1. Automatic delegation to native BlackBerry OS 5.0 FilePicker for file
+ * selections.
+ * 2. Dedicated, rock-solid Directory Chooser where selecting destination
+ * folders via
+ * the OK button, menu, top action bar, or trackwheel click works 100% reliably.
  * 3. In-app new folder creation.
  * 4. Multi-drive root browsing (SD Card & Device Memory).
  * 5. 100% unsigned CLDC 1.1 / JSR-75 compatible.
@@ -51,6 +53,7 @@ public class FilePickerPopup extends MainScreen implements ListFieldCallback {
 
     public interface FilePickerListener {
         void onFileSelected(String selectedUrl);
+
         void onCancelled();
     }
 
@@ -60,71 +63,6 @@ public class FilePickerPopup extends MainScreen implements ListFieldCallback {
      * to the redesigned full-screen chooser for directories or fallback.
      */
     public static void open(final int mode, final FilePickerListener listener) {
-        if (mode != MODE_DIRECTORY_SELECT) {
-            try {
-                final FilePicker fp = FilePicker.getInstance();
-                if (fp != null) {
-                    String defaultPath = AttachmentStorageManager.getInstance().getStorageRoot();
-                    try {
-                        fp.setPath(defaultPath);
-                    } catch (Throwable t) {
-                    }
-
-                    if (mode == MODE_JNB_SELECT) {
-                        fp.setFilter(".jnb");
-                    } else if (mode == MODE_JNBB_SELECT) {
-                        fp.setFilter(".jnbb");
-                    }
-
-                    final boolean[] finished = new boolean[] { false };
-                    fp.setListener(new FilePicker.Listener() {
-                        public void selectionDone(final String selection) {
-                            if (finished[0]) {
-                                return;
-                            }
-                            finished[0] = true;
-                            UiApplication.getUiApplication().invokeLater(new Runnable() {
-                                public void run() {
-                                    if (selection != null && selection.length() > 0) {
-                                        if (mode == MODE_IMAGE_SELECT) {
-                                            String lower = selection.toLowerCase();
-                                            if (!lower.endsWith(".jpg") && !lower.endsWith(".jpeg") &&
-                                                    !lower.endsWith(".png") && !lower.endsWith(".gif") &&
-                                                    !lower.endsWith(".bmp")) {
-                                                Dialog.alert("Please select an image file (.jpg, .png, .gif, .bmp).");
-                                                if (listener != null) {
-                                                    listener.onCancelled();
-                                                }
-                                                return;
-                                            }
-                                        }
-                                        if (listener != null) {
-                                            listener.onFileSelected(selection);
-                                        }
-                                    } else {
-                                        if (listener != null) {
-                                            listener.onCancelled();
-                                        }
-                                    }
-                                }
-                            });
-                        }
-                    });
-
-                    String res = fp.show();
-                    if (res != null && res.length() > 0 && !finished[0]) {
-                        finished[0] = true;
-                        if (listener != null) {
-                            listener.onFileSelected(res);
-                        }
-                    }
-                    return;
-                }
-            } catch (Throwable t) {
-                // Native FilePicker not available or threw; fall back to built-in screen
-            }
-        }
-
         FilePickerPopup screen = new FilePickerPopup(mode, listener);
         UiApplication.getUiApplication().pushScreen(screen);
     }
@@ -302,8 +240,7 @@ public class FilePickerPopup extends MainScreen implements ListFieldCallback {
                         driveLabel,
                         r,
                         "file:///" + r,
-                        0
-                ));
+                        0));
             }
         } catch (Exception e) {
             String fallback = AttachmentStorageManager.getInstance().getStorageRoot();
@@ -312,8 +249,7 @@ public class FilePickerPopup extends MainScreen implements ListFieldCallback {
                     "[Default Storage] (" + fallback + ")",
                     fallback,
                     fallback,
-                    0
-            ));
+                    0));
         }
 
         listField.setSize(items.size());
@@ -344,8 +280,7 @@ public class FilePickerPopup extends MainScreen implements ListFieldCallback {
                     ">> USE THIS FOLDER: " + folderName,
                     folderName,
                     dirUrl,
-                    0
-            ));
+                    0));
         }
 
         // 2. Up one level entry
@@ -354,8 +289,7 @@ public class FilePickerPopup extends MainScreen implements ListFieldCallback {
                 "^ [.. Up One Level]",
                 "..",
                 null,
-                0
-        ));
+                0));
 
         // 3. Populate subdirectories and files
         FileConnection fc = null;
@@ -400,8 +334,7 @@ public class FilePickerPopup extends MainScreen implements ListFieldCallback {
                             "[Folder] " + dirName,
                             dirName,
                             dirUrl + dirName,
-                            0
-                    ));
+                            0));
                 }
 
                 // Add files if not directory-only selection
@@ -422,8 +355,7 @@ public class FilePickerPopup extends MainScreen implements ListFieldCallback {
                                 "[File] " + fileName + " (" + sizeStr + ")",
                                 fileName,
                                 dirUrl + fileName,
-                                sz
-                        ));
+                                sz));
                     }
                 }
             }
@@ -538,7 +470,8 @@ public class FilePickerPopup extends MainScreen implements ListFieldCallback {
      * Resolves the OK button action.
      * Fixes the previous bug: If the user highlights a subfolder in the list,
      * clicking OK will select THAT subfolder as destination!
-     * If the current folder row or empty list is highlighted, it selects currentDirectoryUrl.
+     * If the current folder row or empty list is highlighted, it selects
+     * currentDirectoryUrl.
      */
     private void handleExplicitOkButton() {
         if ("roots://".equals(currentDirectoryUrl)) {
