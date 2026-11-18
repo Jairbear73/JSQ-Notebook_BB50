@@ -199,18 +199,11 @@ public class RichTextParser {
             if (i + 1 < lineCount && trimmed.length() > 0 && !trimmed.startsWith("|") && !trimmed.startsWith("#") && !isTableSeparatorRow(trimmed)) {
                 String nextLineTrimmed = ((String) lines.elementAt(i + 1)).trim();
                 if (nextLineTrimmed.startsWith("===") && nextLineTrimmed.length() >= 3) {
-                    ThemedLabelField h1 = new ThemedLabelField(cleanMarkup(trimmed), h1Font,
-                            LabelField.FOCUSABLE, 0x1A5276, 0x90CDF4);
-                    h1.srcLine = i;
-                    targetManager.add(h1);
-                    targetManager.add(new ThemedSeparatorField());
+                    renderStyledHeading(targetManager, trimmed, h1Font, 0x1A5276, 0x90CDF4, i, true);
                     i++;
                     continue;
                 } else if (nextLineTrimmed.startsWith("---") && nextLineTrimmed.length() >= 3 && !nextLineTrimmed.endsWith("|")) {
-                    ThemedLabelField h2 = new ThemedLabelField(cleanMarkup(trimmed), h2Font,
-                            LabelField.FOCUSABLE, 0x2C3E50, 0xCBD5E1);
-                    h2.srcLine = i;
-                    targetManager.add(h2);
+                    renderStyledHeading(targetManager, trimmed, h2Font, 0x2C3E50, 0xCBD5E1, i, false);
                     i++;
                     continue;
                 }
@@ -260,41 +253,22 @@ public class RichTextParser {
 
             // 4. Headings (with Light / Dark mode intensity reversals)
             if (trimmed.startsWith("###### ")) {
-                ThemedLabelField h6 = new ThemedLabelField(cleanMarkup(trimmed.substring(7)), h6Font,
-                        LabelField.FOCUSABLE, 0x7F8C8D, 0x94A3B8);
-                h6.srcLine = i;
-                targetManager.add(h6);
+                renderStyledHeading(targetManager, trimmed.substring(7), h6Font, 0x7F8C8D, 0x94A3B8, i, false);
                 continue;
             } else if (trimmed.startsWith("##### ")) {
-                ThemedLabelField h5 = new ThemedLabelField(cleanMarkup(trimmed.substring(6)), h5Font,
-                        LabelField.FOCUSABLE, 0x64748B, 0xCBD5E1);
-                h5.srcLine = i;
-                targetManager.add(h5);
+                renderStyledHeading(targetManager, trimmed.substring(6), h5Font, 0x64748B, 0xCBD5E1, i, false);
                 continue;
             } else if (trimmed.startsWith("#### ")) {
-                ThemedLabelField h4 = new ThemedLabelField(cleanMarkup(trimmed.substring(5)), h4Font,
-                        LabelField.FOCUSABLE, 0x5D6D7E, 0x94A3B8);
-                h4.srcLine = i;
-                targetManager.add(h4);
+                renderStyledHeading(targetManager, trimmed.substring(5), h4Font, 0x5D6D7E, 0x94A3B8, i, false);
                 continue;
             } else if (trimmed.startsWith("### ")) {
-                ThemedLabelField h3 = new ThemedLabelField(cleanMarkup(trimmed.substring(4)), h3Font,
-                        LabelField.FOCUSABLE, 0x34495E, 0xE2E8F0);
-                h3.srcLine = i;
-                targetManager.add(h3);
+                renderStyledHeading(targetManager, trimmed.substring(4), h3Font, 0x34495E, 0xE2E8F0, i, false);
                 continue;
             } else if (trimmed.startsWith("## ")) {
-                ThemedLabelField h2 = new ThemedLabelField(cleanMarkup(trimmed.substring(3)), h2Font,
-                        LabelField.FOCUSABLE, 0x2C3E50, 0xCBD5E1);
-                h2.srcLine = i;
-                targetManager.add(h2);
+                renderStyledHeading(targetManager, trimmed.substring(3), h2Font, 0x2C3E50, 0xCBD5E1, i, false);
                 continue;
             } else if (trimmed.startsWith("# ")) {
-                ThemedLabelField h1 = new ThemedLabelField(cleanMarkup(trimmed.substring(2)), h1Font,
-                        LabelField.FOCUSABLE, 0x1A5276, 0x90CDF4);
-                h1.srcLine = i;
-                targetManager.add(h1);
-                targetManager.add(new ThemedSeparatorField());
+                renderStyledHeading(targetManager, trimmed.substring(2), h1Font, 0x1A5276, 0x90CDF4, i, true);
                 continue;
             }
 
@@ -507,6 +481,224 @@ public class RichTextParser {
         }
     }
 
+    /**
+     * Custom interactive checklist item that renders inline formatting in its label.
+     */
+    public static class TaskItemField extends Field {
+        private Vector labelSegments;
+        private boolean checked;
+        private boolean cancelled;
+        private int indentPx;
+        private Page page;
+        private int lineIndex;
+        private Runnable onNotesChangedCallback;
+        private int cachedHeight;
+        private Vector lineLayouts; // Vector of Vectors of Word
+        private Vector words;
+        /** Source line index in the notes string this field was rendered from (-1 if unknown). */
+        public int srcLine = -1;
+
+        public TaskItemField(Vector labelSegments, boolean checked, boolean cancelled, int indentPx,
+                Page page, int lineIndex, Runnable onNotesChangedCallback) {
+            super(Field.FOCUSABLE);
+            this.labelSegments = labelSegments != null ? labelSegments : new Vector();
+            this.checked = checked;
+            this.cancelled = cancelled;
+            this.indentPx = indentPx;
+            this.page = page;
+            this.lineIndex = lineIndex;
+            this.onNotesChangedCallback = onNotesChangedCallback;
+        }
+
+        public int getPreferredWidth() { return Graphics.getScreenWidth(); }
+        public int getPreferredHeight() { return cachedHeight; }
+
+        protected void layout(int width, int height) {
+            int boxSize = baseFont.getHeight();
+            int textX = indentPx + boxSize + 6;
+            int textWidth = width - textX - 4;
+            if (textWidth < 40) textWidth = 40;
+            buildWords(labelSegments);
+            // re-wrap using textWidth
+            lineLayouts = new Vector();
+            Vector currentLineWords = new Vector();
+            int currentLineWidth = 0;
+            for (int w = 0; w < words.size(); w++) {
+                Word word = (Word) words.elementAt(w);
+                if (currentLineWidth + word.totalWidth > textWidth && currentLineWidth > 0) {
+                    lineLayouts.addElement(currentLineWords);
+                    currentLineWords = new Vector();
+                    currentLineWidth = 0;
+                }
+                currentLineWords.addElement(word);
+                currentLineWidth += word.totalWidth;
+            }
+            if (currentLineWords.size() > 0) {
+                lineLayouts.addElement(currentLineWords);
+            }
+            int numLines = lineLayouts.size();
+            if (numLines == 0) numLines = 1;
+            cachedHeight = numLines * (baseFont.getHeight() + 4) + 4;
+            setExtent(width, cachedHeight);
+        }
+
+        private void buildWords(Vector segments) {
+            words = new Vector();
+            Word currentWord = new Word();
+            for (int s = 0; s < segments.size(); s++) {
+                SpanSegment seg = (SpanSegment) segments.elementAt(s);
+                String text = seg.text;
+                Font f = getFontForSegment(seg);
+                int len = text.length();
+                int idx = 0;
+                while (idx < len) {
+                    int nextSpace = text.indexOf(' ', idx);
+                    String chunk;
+                    if (nextSpace >= 0) {
+                        chunk = text.substring(idx, nextSpace + 1);
+                        idx = nextSpace + 1;
+                    } else {
+                        chunk = text.substring(idx);
+                        idx = len;
+                    }
+                    currentWord.addFragment(chunk, f, seg.isUnderline, seg.isStrike, seg.isHighlight, seg.isCode, seg.isLink);
+                    if (chunk.endsWith(" ")) {
+                        words.addElement(currentWord);
+                        currentWord = new Word();
+                    }
+                }
+            }
+            if (currentWord.fragments.size() > 0) {
+                words.addElement(currentWord);
+            }
+        }
+
+        protected void onFocus(int direction) {
+            super.onFocus(direction);
+            invalidate();
+        }
+
+        protected void onUnfocus() {
+            super.onUnfocus();
+            invalidate();
+        }
+
+        protected boolean navigationClick(int status, int time) {
+            toggleState();
+            return true;
+        }
+
+        protected boolean keyChar(char key, int status, int time) {
+            if (key == ' ' || key == '\n') {
+                toggleState();
+                return true;
+            }
+            return super.keyChar(key, status, time);
+        }
+
+        private void toggleState() {
+            if (!cancelled) {
+                checked = !checked;
+                invalidate();
+                if (page != null) {
+                    updateTaskInPageNotes(page, lineIndex, checked);
+                    if (onNotesChangedCallback != null) {
+                        onNotesChangedCallback.run();
+                    }
+                }
+            }
+        }
+
+        public void getFocusRect(XYRect rect) {
+            rect.set(0, 0, getWidth(), Math.max(cachedHeight, baseFont.getHeight() + 4));
+        }
+
+        protected void drawFocus(Graphics g, boolean on) {
+            if (on) {
+                boolean dark = AppSettings.getInstance().isDarkMode();
+                g.setColor(dark ? 0x9999AA : 0x888888);
+                g.fillRect(1, 1, 2, Math.max(cachedHeight - 2, baseFont.getHeight()));
+            }
+        }
+
+        protected void paint(Graphics g) {
+            boolean dark = AppSettings.getInstance().isDarkMode();
+            int fontH = baseFont.getHeight();
+            int boxSize = fontH - 1;
+            int boxX = indentPx + 2;
+            int boxY = 2;
+
+            // Draw checkbox
+            int borderColor = dark ? 0x94A3B8 : 0x64748B;
+            int fillColor = dark ? 0x0F172A : 0xFFFFFF;
+            g.setColor(borderColor);
+            g.drawRect(boxX, boxY, boxSize, boxSize);
+            g.setColor(fillColor);
+            g.fillRect(boxX + 1, boxY + 1, boxSize - 1, boxSize - 1);
+
+            if (cancelled) {
+                // Draw dash for cancelled
+                g.setColor(dark ? 0x94A3B8 : 0x64748B);
+                int midY = boxY + boxSize / 2;
+                g.drawLine(boxX + 3, midY, boxX + boxSize - 3, midY);
+            } else if (checked) {
+                // Draw checkmark
+                int ckColor = dark ? 0x60A5FA : 0x1D4ED8;
+                g.setColor(ckColor);
+                g.drawLine(boxX + 2, boxY + (boxSize / 2), boxX + (boxSize / 2) - 1, boxY + boxSize - 3);
+                g.drawLine(boxX + (boxSize / 2) - 1, boxY + boxSize - 3, boxX + boxSize - 2, boxY + 2);
+                g.drawLine(boxX + 2, boxY + (boxSize / 2) - 1, boxX + (boxSize / 2) - 1, boxY + boxSize - 4);
+                g.drawLine(boxX + (boxSize / 2) - 1, boxY + boxSize - 4, boxX + boxSize - 2, boxY + 1);
+            }
+
+            // Draw label text
+            int textX = boxX + boxSize + 4;
+            int defaultTextColor = dark ? 0xF1F5F9 : 0x000000;
+            int codeTextColor = dark ? 0xFB7185 : 0x990000;
+            int highlightTextColor = dark ? 0xFEF08A : 0x000000;
+            int linkTextColor = dark ? 0x60A5FA : 0x1D4ED8;
+            int strikeColor = dark ? 0x94A3B8 : 0x777777;
+
+            int y = 2;
+            if (lineLayouts != null) {
+                for (int l = 0; l < lineLayouts.size(); l++) {
+                    Vector lineWords = (Vector) lineLayouts.elementAt(l);
+                    int x = textX;
+                    for (int w = 0; w < lineWords.size(); w++) {
+                        Word word = (Word) lineWords.elementAt(w);
+                        for (int f = 0; f < word.fragments.size(); f++) {
+                            Fragment frag = (Fragment) word.fragments.elementAt(f);
+                            int fh = frag.font.getHeight();
+                            if (frag.isHighlight) {
+                                g.setColor(dark ? 0x785B00 : 0xFFF3A8);
+                                g.fillRect(x, y - 1, frag.width, fh + 2);
+                            } else if (frag.isCode) {
+                                g.setColor(dark ? 0x27272A : 0xECEFF1);
+                                g.fillRect(x, y - 1, frag.width, fh + 2);
+                            }
+                            if (frag.isLink) g.setColor(linkTextColor);
+                            else if (frag.isHighlight) g.setColor(highlightTextColor);
+                            else if (frag.isCode) g.setColor(codeTextColor);
+                            else g.setColor(defaultTextColor);
+                            g.setFont(frag.font);
+                            g.drawText(frag.text, x, y);
+                            if (frag.isUnderline || frag.isLink) {
+                                g.setColor(frag.isLink ? linkTextColor : defaultTextColor);
+                                g.drawLine(x, y + fh - 1, x + frag.width, y + fh - 1);
+                            }
+                            if (frag.isStrike) {
+                                g.setColor(strikeColor);
+                                g.drawLine(x, y + fh / 2, x + frag.width, y + fh / 2);
+                            }
+                            x += frag.width;
+                        }
+                    }
+                    y += fontH + 4;
+                }
+            }
+        }
+    }
+
     // ==========================================
     // Table Rendering
     // ==========================================
@@ -603,9 +795,11 @@ public class RichTextParser {
                 if (TableField.isCellCheckbox(c)) {
                     String label = TableField.getCellCheckboxLabel(c);
                     String prefix = TableField.isCellCheckboxChecked(c) ? "[x]" : "[ ]";
-                    cells.addElement(prefix + (label.length() > 0 ? " " + cleanMarkup(label) : ""));
+                    // Keep label raw so table paint can render inline formatting
+                    cells.addElement(prefix + (label.length() > 0 ? " " + label : ""));
                 } else {
-                    cells.addElement(cleanMarkup(c));
+                    // Keep raw markup; TableField.paint() will parse and render it styled
+                    cells.addElement(c);
                 }
             }
         }
@@ -1033,10 +1227,49 @@ public class RichTextParser {
                     }
 
                     if (cellLines != null) {
-                        g.setColor(isHdr ? headerTextColor : dataTextColor);
+                        int defaultCellColor = isHdr ? headerTextColor : dataTextColor;
+                        int codeTextColor = dark ? 0xFB7185 : 0x990000;
+                        int highlightTextColor = dark ? 0xFEF08A : 0x000000;
+                        int linkTextColor = dark ? 0x60A5FA : 0x1D4ED8;
+                        int strikeColor = dark ? 0x94A3B8 : 0x777777;
                         for (int l = 0; l < cellLines.size(); l++) {
                             String lineStr = (String) cellLines.elementAt(l);
-                            g.drawText(lineStr, textX, y + 4 + l * fontH);
+                            int lineY = y + 4 + l * fontH;
+                            if (hasInlineMarkup(lineStr)) {
+                                Vector segs = parseInlineSpans(lineStr);
+                                int sx = textX;
+                                for (int si = 0; si < segs.size(); si++) {
+                                    SpanSegment seg = (SpanSegment) segs.elementAt(si);
+                                    Font sf = isHdr ? deriveBoldFont(seg) : getFontForSegment(seg);
+                                    int sw = sf.getAdvance(seg.text);
+                                    if (seg.isHighlight) {
+                                        g.setColor(dark ? 0x785B00 : 0xFFF3A8);
+                                        g.fillRect(sx, lineY - 1, sw, sf.getHeight() + 2);
+                                    } else if (seg.isCode) {
+                                        g.setColor(dark ? 0x27272A : 0xECEFF1);
+                                        g.fillRect(sx, lineY - 1, sw, sf.getHeight() + 2);
+                                    }
+                                    if (seg.isLink) g.setColor(linkTextColor);
+                                    else if (seg.isHighlight) g.setColor(highlightTextColor);
+                                    else if (seg.isCode) g.setColor(codeTextColor);
+                                    else g.setColor(defaultCellColor);
+                                    g.setFont(sf);
+                                    g.drawText(seg.text, sx, lineY);
+                                    if (seg.isUnderline || seg.isLink) {
+                                        g.setColor(seg.isLink ? linkTextColor : defaultCellColor);
+                                        g.drawLine(sx, lineY + sf.getHeight() - 1, sx + sw, lineY + sf.getHeight() - 1);
+                                    }
+                                    if (seg.isStrike) {
+                                        g.setColor(strikeColor);
+                                        g.drawLine(sx, lineY + sf.getHeight() / 2, sx + sw, lineY + sf.getHeight() / 2);
+                                    }
+                                    sx += sw;
+                                }
+                            } else {
+                                g.setFont(font);
+                                g.setColor(defaultCellColor);
+                                g.drawText(lineStr, textX, lineY);
+                            }
                         }
                     }
 
@@ -1499,37 +1732,31 @@ public class RichTextParser {
             final Runnable onNotesChangedCallback, int leadingSpaces) {
         String s = line.trim();
         if (s.startsWith("- ") || s.startsWith("* ") || s.startsWith("+ ") || s.startsWith("> ")
-                || s.startsWith("• ")) {
+                || s.startsWith("\u2022 ")) {
             s = s.substring(2).trim();
         }
         final boolean isCancelled = s.startsWith("[-]") || s.startsWith("[~]");
         final boolean isChecked = StringUtils.startsWithIgnoreCase(s, "[x]") || isCancelled;
         int closeBracket = s.indexOf(']');
         String taskLabel = closeBracket >= 0 ? s.substring(closeBracket + 1).trim() : s;
-        if (isCancelled && taskLabel.length() > 0) {
-            taskLabel = "[CANCELLED] " + taskLabel;
-        }
 
         int level = (leadingSpaces / 2) + 1;
-        StringBuffer indent = new StringBuffer();
-        for (int ind = 0; ind < (level - 1) * 2; ind++) {
-            indent.append(' ');
-        }
-        indent.append(' ');
+        int indentPx = (level - 1) * 12;
 
-        final ThemedCheckboxField cb = new ThemedCheckboxField(indent.toString() + taskLabel, isChecked);
-        if (page != null) {
-            cb.setChangeListener(new FieldChangeListener() {
-                public void fieldChanged(Field field, int context) {
-                    boolean newChecked = cb.getChecked();
-                    updateTaskInPageNotes(page, lineIndex, newChecked);
-                    if (onNotesChangedCallback != null) {
-                        onNotesChangedCallback.run();
-                    }
-                }
-            });
+        Vector labelSegments = parseInlineSpans(taskLabel);
+        if (isCancelled) {
+            Vector strikeSeg = new Vector();
+            for (int k = 0; k < labelSegments.size(); k++) {
+                SpanSegment orig = (SpanSegment) labelSegments.elementAt(k);
+                strikeSeg.addElement(new SpanSegment(orig.text, orig.isBold, orig.isItalic,
+                        orig.isUnderline, true, orig.isHighlight, orig.isCode, orig.isLink, orig.isKbd, orig.linkUrl));
+            }
+            labelSegments = strikeSeg;
         }
-        targetManager.add(cb);
+
+        final TaskItemField tif = new TaskItemField(labelSegments, isChecked, isCancelled, indentPx,
+                page, lineIndex, onNotesChangedCallback);
+        targetManager.add(tif);
     }
 
     private static void updateTaskInPageNotes(Page page, int lineIdx, boolean checked) {
@@ -1635,10 +1862,19 @@ public class RichTextParser {
             darkColor = 0x90CDF4;
         }
 
-        ThemedLabelField tagLbl = new ThemedLabelField(displayTag + rest, boldFont, LabelField.FOCUSABLE, lightColor,
-                darkColor);
-        tagLbl.srcLine = srcLineIdx;
-        targetManager.add(tagLbl);
+        // Build segments: bold coloured tag prefix + parsed rest
+        Vector segments = new Vector();
+        segments.addElement(new SpanSegment(displayTag, true, false, false, false, false, false));
+        if (rest.length() > 0) {
+            Vector restSegs = parseInlineSpans(rest);
+            for (int k = 0; k < restSegs.size(); k++) {
+                segments.addElement(restSegs.elementAt(k));
+            }
+        }
+
+        RichParagraphField rpf = new RichParagraphField(segments, null, lightColor, darkColor);
+        rpf.srcLine = srcLineIdx;
+        targetManager.add(rpf);
     }
 
     // ==========================================
@@ -1774,6 +2010,40 @@ public class RichTextParser {
     // ==========================================
     // Inline Styled Paragraph Rendering
     // ==========================================
+    private static boolean hasInlineMarkup(String text) {
+        return text.indexOf('*') >= 0 || text.indexOf('_') >= 0 || text.indexOf('~') >= 0
+                || text.indexOf('=') >= 0 || text.indexOf('`') >= 0 || text.indexOf('<') >= 0
+                || text.indexOf('[') >= 0;
+    }
+
+    /**
+     * Renders a heading line, using rich inline formatting if the text contains
+     * markup, or a fast ThemedLabelField otherwise.
+     */
+    private static void renderStyledHeading(Manager targetManager, String text, Font hFont,
+            int lightColor, int darkColor, int srcLineIdx, boolean addSeparator) {
+        if (hasInlineMarkup(text)) {
+            Vector segments = parseInlineSpans(text);
+            if (segments.size() == 0) {
+                ThemedLabelField lbl = new ThemedLabelField(" ", hFont, LabelField.FOCUSABLE, lightColor, darkColor);
+                lbl.srcLine = srcLineIdx;
+                targetManager.add(lbl);
+            } else {
+                RichParagraphField rpf = new RichParagraphField(segments, hFont, lightColor, darkColor);
+                rpf.srcLine = srcLineIdx;
+                targetManager.add(rpf);
+            }
+        } else {
+            ThemedLabelField lbl = new ThemedLabelField(text.length() > 0 ? text : " ", hFont,
+                    LabelField.FOCUSABLE, lightColor, darkColor);
+            lbl.srcLine = srcLineIdx;
+            targetManager.add(lbl);
+        }
+        if (addSeparator) {
+            targetManager.add(new ThemedSeparatorField());
+        }
+    }
+
     private static void renderStyledLine(Manager targetManager, String line) {
         renderStyledLine(targetManager, line, -1);
     }
@@ -1876,10 +2146,49 @@ public class RichTextParser {
         }
     }
 
+    /** Like getFontForSegment but always starts from boldFont (for table headers). */
+    private static Font deriveBoldFont(SpanSegment seg) {
+        if (seg.isKbd || seg.isCode) {
+            return monoFont;
+        } else if (seg.isItalic) {
+            return boldItalicFont;
+        } else {
+            return boldFont;
+        }
+    }
+
+    /**
+     * Like getFontForSegment but derives bold/italic/etc relative to a base font override.
+     * When baseOverride is null, falls back to getFontForSegment.
+     */
+    private static Font getFontForSegmentWithBase(SpanSegment seg, Font baseOverride) {
+        if (baseOverride == null) {
+            return getFontForSegment(seg);
+        }
+        if (seg.isKbd || seg.isCode) {
+            return monoFont;
+        }
+        int style = Font.PLAIN;
+        if (seg.isBold && seg.isItalic) {
+            style = Font.BOLD | Font.ITALIC;
+        } else if (seg.isBold) {
+            style = Font.BOLD;
+        } else if (seg.isItalic) {
+            style = Font.ITALIC;
+        }
+        if (style == Font.PLAIN) {
+            return baseOverride;
+        }
+        return baseOverride.derive(style, baseOverride.getHeight(), net.rim.device.api.ui.Ui.UNITS_px);
+    }
+
     public static class RichParagraphField extends Field {
         private int cachedHeight;
         private Vector lineLayouts; // Vector of Vectors containing Word objects
         private Vector words;
+        private Font baseFontOverride;
+        private int lightColorOverride;
+        private int darkColorOverride;
         private int focusedLine = 0;
         /**
          * Source line index in the notes string this field was rendered from (-1 if
@@ -1888,7 +2197,19 @@ public class RichTextParser {
         public int srcLine = -1;
 
         public RichParagraphField(Vector segments) {
+            this(segments, null, -1, -1);
+        }
+
+        /**
+         * @param baseFontOverride if non-null, used as the base font (e.g. a heading font).
+         * @param lightColorOverride if != -1, overrides the default light-mode text colour.
+         * @param darkColorOverride if != -1, overrides the default dark-mode text colour.
+         */
+        public RichParagraphField(Vector segments, Font baseFontOverride, int lightColorOverride, int darkColorOverride) {
             super(Field.FOCUSABLE);
+            this.baseFontOverride = baseFontOverride;
+            this.lightColorOverride = lightColorOverride;
+            this.darkColorOverride = darkColorOverride;
             buildWords(segments);
         }
 
@@ -1961,7 +2282,7 @@ public class RichTextParser {
             for (int s = 0; s < segments.size(); s++) {
                 SpanSegment seg = (SpanSegment) segments.elementAt(s);
                 String text = seg.text;
-                Font f = getFontForSegment(seg);
+                Font f = getFontForSegmentWithBase(seg, baseFontOverride);
 
                 int len = text.length();
                 int i = 0;
@@ -2019,16 +2340,24 @@ public class RichTextParser {
                 lineLayouts.addElement(currentLineWords);
             }
 
-            cachedHeight = lineLayouts.size() * (baseFont.getHeight() + 4);
+            cachedHeight = lineLayouts.size() * ((baseFontOverride != null ? baseFontOverride.getHeight() : baseFont.getHeight()) + 4);
             setExtent(width, cachedHeight);
         }
 
         protected void paint(Graphics g) {
             boolean dark = AppSettings.getInstance().isDarkMode();
-            int defaultTextColor = dark ? 0xF1F5F9 : 0x000000;
+            int defaultTextColor;
+            if (lightColorOverride != -1 || darkColorOverride != -1) {
+                defaultTextColor = dark
+                    ? (darkColorOverride != -1 ? darkColorOverride : 0xF1F5F9)
+                    : (lightColorOverride != -1 ? lightColorOverride : 0x000000);
+            } else {
+                defaultTextColor = dark ? 0xF1F5F9 : 0x000000;
+            }
             int codeTextColor = dark ? 0xFB7185 : 0x990000;
             int highlightTextColor = dark ? 0xFEF08A : 0x000000;
             int linkTextColor = dark ? 0x60A5FA : 0x1D4ED8;
+            int lineH = (baseFontOverride != null ? baseFontOverride.getHeight() : baseFont.getHeight()) + 4;
 
             int y = 2;
             int numLines = lineLayouts.size();
@@ -2066,7 +2395,7 @@ public class RichTextParser {
 
                         // Underline or link underline
                         if (frag.isUnderline || frag.isLink) {
-                            g.setColor(frag.isLink ? linkTextColor : (dark ? 0xF1F5F9 : 0x000000));
+                            g.setColor(frag.isLink ? linkTextColor : defaultTextColor);
                             g.drawLine(x, y + fontH - 1, x + frag.width, y + fontH - 1);
                         }
 
@@ -2079,7 +2408,7 @@ public class RichTextParser {
                         x += frag.width;
                     }
                 }
-                y += baseFont.getHeight() + 4;
+                y += lineH;
             }
         }
     }
@@ -2142,8 +2471,11 @@ public class RichTextParser {
     }
 
     /**
+    /**
      * Parses a line for inline spans: bold (*** or **), italic (*), underline (__),
      * strikethrough (~~), highlight (==), inline code (`), kbd (<kbd>), and links ([text](url)).
+     * Fixes: code spans are literal (no nested markup), *** correctly toggles both on/off,
+     * isolated asterisks in math (2 * 3) are treated as literal, link text parsed for inner formatting.
      */
     public static Vector parseInlineSpans(String line) {
         Vector segments = new Vector();
@@ -2158,104 +2490,128 @@ public class RichTextParser {
         StringBuffer current = new StringBuffer();
 
         while (i < len) {
+            char ch = line.charAt(i);
+
+            // Inside a code span: everything is literal until closing backtick
+            if (code) {
+                if (ch == '`') {
+                    if (current.length() > 0) {
+                        segments.addElement(new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, true, false));
+                        current = new StringBuffer();
+                    }
+                    code = false;
+                    i++;
+                } else {
+                    current.append(ch);
+                    i++;
+                }
+                continue;
+            }
+
             // *** Bold + Italic
-            if (i + 2 < len && line.charAt(i) == '*' && line.charAt(i + 1) == '*' && line.charAt(i + 2) == '*') {
+            if (i + 2 < len && ch == '*' && line.charAt(i + 1) == '*' && line.charAt(i + 2) == '*') {
                 if (current.length() > 0) {
-                    segments.addElement(
-                            new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, code, false));
+                    segments.addElement(new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, false, false));
                     current = new StringBuffer();
                 }
-                bold = !bold;
-                italic = !italic;
+                // Toggle: if both on turn both off; otherwise turn both on
+                if (bold && italic) { bold = false; italic = false; }
+                else { bold = true; italic = true; }
                 i += 3;
-            } else if (i + 1 < len && line.charAt(i) == '*' && line.charAt(i + 1) == '*') {
+            } else if (i + 1 < len && ch == '*' && line.charAt(i + 1) == '*') {
                 // ** Bold
                 if (current.length() > 0) {
-                    segments.addElement(
-                            new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, code, false));
+                    segments.addElement(new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, false, false));
                     current = new StringBuffer();
                 }
                 bold = !bold;
                 i += 2;
-            } else if (i + 1 < len && line.charAt(i) == '_' && line.charAt(i + 1) == '_') {
+            } else if (i + 1 < len && ch == '_' && line.charAt(i + 1) == '_') {
                 // __ Underline
                 if (current.length() > 0) {
-                    segments.addElement(
-                            new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, code, false));
+                    segments.addElement(new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, false, false));
                     current = new StringBuffer();
                 }
                 underline = !underline;
                 i += 2;
-            } else if (i + 1 < len && line.charAt(i) == '~' && line.charAt(i + 1) == '~') {
+            } else if (i + 1 < len && ch == '~' && line.charAt(i + 1) == '~') {
                 // ~~ Strikethrough
                 if (current.length() > 0) {
-                    segments.addElement(
-                            new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, code, false));
+                    segments.addElement(new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, false, false));
                     current = new StringBuffer();
                 }
                 strike = !strike;
                 i += 2;
-            } else if (i + 1 < len && line.charAt(i) == '=' && line.charAt(i + 1) == '=') {
+            } else if (i + 1 < len && ch == '=' && line.charAt(i + 1) == '=') {
                 // == Highlight
                 if (current.length() > 0) {
-                    segments.addElement(
-                            new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, code, false));
+                    segments.addElement(new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, false, false));
                     current = new StringBuffer();
                 }
                 highlight = !highlight;
                 i += 2;
             } else if (i + 4 < len && line.substring(i, i + 5).equalsIgnoreCase("<kbd>")) {
-                // <kbd> keyboard key
+                // <kbd> ... </kbd> keyboard key — scan to closing tag
                 if (current.length() > 0) {
-                    segments.addElement(
-                            new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, code, false));
+                    segments.addElement(new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, false, false));
+                    current = new StringBuffer();
+                }
+                i += 5;
+                int kbdEnd = -1;
+                for (int k = i; k <= len - 6; k++) {
+                    if (line.substring(k, k + 6).equalsIgnoreCase("</kbd>")) {
+                        kbdEnd = k;
+                        break;
+                    }
+                }
+                if (kbdEnd >= i) {
+                    String kbdText = line.substring(i, kbdEnd);
+                    segments.addElement(new SpanSegment(kbdText, false, false, false, false, true, true, false, true, null));
+                    i = kbdEnd + 6;
+                }
+                // else no closing tag: skip
+            } else if (ch == '`') {
+                // ` Start inline code span
+                if (current.length() > 0) {
+                    segments.addElement(new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, false, false));
                     current = new StringBuffer();
                 }
                 code = true;
-                highlight = true;
-                i += 5;
-            } else if (i + 5 < len && line.substring(i, i + 6).equalsIgnoreCase("</kbd>")) {
-                // </kbd>
-                if (current.length() > 0) {
-                    segments.addElement(
-                            new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, code, false));
-                    current = new StringBuffer();
-                }
-                code = false;
-                highlight = false;
-                i += 6;
-            } else if (line.charAt(i) == '`') {
-                // ` Inline Code
-                if (current.length() > 0) {
-                    segments.addElement(
-                            new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, code, false));
-                    current = new StringBuffer();
-                }
-                code = !code;
-                i += 1;
-            } else if (line.charAt(i) == '[' && line.indexOf("](", i) > i && line.indexOf(')', line.indexOf("](", i)) > 0) {
-                // Inline link [text](url)
+                i++;
+            } else if (ch == '[' && line.indexOf("](", i) > i && line.indexOf(')', line.indexOf("](", i)) > 0) {
+                // Inline link [text](url) — parse inner text for formatting
                 int mid = line.indexOf("](", i);
                 int close = line.indexOf(')', mid);
                 if (current.length() > 0) {
-                    segments.addElement(
-                            new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, code, false));
+                    segments.addElement(new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, false, false));
                     current = new StringBuffer();
                 }
                 String linkText = line.substring(i + 1, mid);
-                segments.addElement(new SpanSegment(linkText, bold, italic, true, strike, highlight, code, true));
-                i = close + 1;
-            } else if (line.charAt(i) == '*') {
-                // * Italic
-                if (current.length() > 0) {
-                    segments.addElement(
-                            new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, code, false));
-                    current = new StringBuffer();
+                String linkUrl = line.substring(mid + 2, close);
+                Vector innerSegs = parseInlineSpans(linkText);
+                for (int k = 0; k < innerSegs.size(); k++) {
+                    SpanSegment inner = (SpanSegment) innerSegs.elementAt(k);
+                    segments.addElement(new SpanSegment(inner.text, inner.isBold, inner.isItalic,
+                            true, inner.isStrike, inner.isHighlight, inner.isCode, true, inner.isKbd, linkUrl));
                 }
-                italic = !italic;
-                i += 1;
+                i = close + 1;
+            } else if (ch == '*') {
+                // Single * — italic, BUT only if not an isolated math operator (space on both sides)
+                boolean prevSpace = (i == 0) || (line.charAt(i - 1) == ' ');
+                boolean nextSpace = (i + 1 >= len) || (line.charAt(i + 1) == ' ');
+                if (prevSpace && nextSpace) {
+                    current.append(ch);
+                    i++;
+                } else {
+                    if (current.length() > 0) {
+                        segments.addElement(new SpanSegment(current.toString(), bold, italic, underline, strike, highlight, false, false));
+                        current = new StringBuffer();
+                    }
+                    italic = !italic;
+                    i++;
+                }
             } else {
-                current.append(line.charAt(i));
+                current.append(ch);
                 i++;
             }
         }
